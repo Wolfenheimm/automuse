@@ -91,9 +91,6 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if m.Content == "queue" {
 			go getQueue(m)
 		}
-		if m.Content == "UwU" {
-			go queueYT("play https://www.youtube.com/watch?v=rlkSMp7iz6c", m, v, voiceChannelID, channel)
-		}
 		if strings.Contains(m.Content, "play") && strings.Contains(m.Content, "youtube") && strings.Contains(m.Content, "list") {
 			go fetchYouTubePlaylist(m.Content, m, v, voiceChannelID, channel)
 		}
@@ -314,7 +311,7 @@ func playQueue(m *discordgo.MessageCreate) {
 		if len(queue) == 0 {
 			v.nowPlaying = Song{}
 			v.voice.Disconnect()
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing left to play, peace fuckers! :v:")
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing left to play, peace! :v:")
 		} else {
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Next! Now playing ["+queue[0].Title+"] :loop:")
 		}
