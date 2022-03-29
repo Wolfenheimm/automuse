@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -53,7 +54,7 @@ func main() {
 }
 
 func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
-	// avoid handling the message that the bot creates when replying to a user
+	// Avoid handling the message that the bot creates when replying to a user
 	if m.Author.Bot {
 		return
 	}
@@ -71,17 +72,21 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	v.guildID = guildID
 	v.session = s
 
-	if message := extractor(m.Content); message != "" {
-		if strings.Contains(message, "play") && strings.Contains(message, "youtube") {
-			go queueYT(message, m, v, voiceChannelID, channel)
+	if m.Content != "" {
+		if strings.Contains(m.Content, "play") && strings.Contains(m.Content, "youtube") {
+			go queueYT(m.Content, m, v, voiceChannelID, channel)
+			log.Printf("In queue")
 		}
-		if strings.Contains(message, "stop") {
-			go stopYT(message, m, v, voiceChannelID)
+		if m.Content == "stop" {
+			go stopYT(m.Content, m, v, voiceChannelID)
 		}
-		if strings.Contains(message, "skip") {
-			go skipYT(message, m, v, voiceChannelID)
+		if m.Content == "skip" {
+			go skipYT(m.Content, m, v, voiceChannelID)
 		}
-		if strings.Contains(message, "UwU") {
+		if m.Content == "queue" {
+			go getQueue(m)
+		}
+		if m.Content == "UwU" {
 			go queueYT("play https://www.youtube.com/watch?v=rlkSMp7iz6c", m, v, voiceChannelID, channel)
 		}
 	} else {
@@ -153,12 +158,16 @@ func queueYT(message string, m *discordgo.MessageCreate, v *VoiceInstance, chann
 }
 
 func stopYT(message string, m *discordgo.MessageCreate, v *VoiceInstance, channelId string) {
-	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Stopping ["+v.nowPlaying.Title+"] :octagonal_sign:")
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Stopping ["+v.nowPlaying.Title+"] & Clearing Queue :octagonal_sign:")
 	v.stop = true
+
+	queue = []Song{}
 
 	if v.encoder != nil {
 		v.encoder.Cleanup()
 	}
+
+	v.voice.Disconnect()
 }
 
 func skipYT(message string, m *discordgo.MessageCreate, v *VoiceInstance, channelId string) {
@@ -205,8 +214,15 @@ func playQueue(m *discordgo.MessageCreate) {
 	}
 }
 
-func extractor(content string) string {
-	return content
+func getQueue(m *discordgo.MessageCreate) {
+	queueList := ":musical_note:   QUEUE LIST   :musical_note:\n"
+	queueList = queueList + "Now Playing: " + v.nowPlaying.Title + "  ->  Queued by <@" + v.nowPlaying.User + "> \n"
+	for index, element := range queue {
+		queueList = queueList + " " + strconv.Itoa(index+1) + ". " + element.Title + "  ->  Queued by <@" + element.User + "> \n"
+	}
+
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Fetching Queue...")
+	s.ChannelMessageSend(m.ChannelID, queueList)
 }
 
 func SearchGuild(textChannelID string) (guildID string) {
