@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"io"
 	"log"
 	"os"
@@ -13,7 +12,7 @@ import (
 	yt "github.com/kkdai/youtube/v2"
 )
 
-// bot parameters
+// Bot Parameters
 var (
 	botToken       string
 	voiceChannelID string
@@ -22,24 +21,18 @@ var (
 	v              = new(VoiceInstance)
 	client         = yt.Client{Debug: true}
 	song           = Song{}
+	queue          = []Song{}
 )
 
+// Initialize Discord Session
 func init() {
-	log.Println("In bot token")
-	botToken = os.Getenv("BOT_TOKEN")
-	flag.Parse()
-	o = make(chan string)
-}
-
-// create discord session
-func init() {
-	log.Println("In discord init")
 	var err error
+	botToken = os.Getenv("BOT_TOKEN") // Set your discord bot token as an environment variable.
 	s, err = discordgo.New("Bot " + botToken)
 	if err != nil {
 		log.Fatalf("Invalid bot parameters: %v", err)
 	}
-	v.stop = true
+	v.stop = true // Used to check if the bot is in channel playing music.
 }
 
 func main() {
@@ -80,7 +73,7 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	if message := extractor(m.Content); message != "" {
 		if strings.Contains(message, "play") && strings.Contains(message, "youtube") {
-			go playYT(message, m, v, voiceChannelID, channel)
+			go queueYT(message, m, v, voiceChannelID, channel)
 		}
 		if strings.Contains(message, "stop") {
 			go stopYT(message, m, v, voiceChannelID)
@@ -89,7 +82,7 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 			go skipYT(message, m, v, voiceChannelID)
 		}
 		if strings.Contains(message, "UwU") {
-			go uwuYT(message, m, v, voiceChannelID, channel)
+			go queueYT("play https://www.youtube.com/watch?v=rlkSMp7iz6c", m, v, voiceChannelID, channel)
 		}
 	} else {
 		return
@@ -98,7 +91,7 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 // Play Youtube Music in Channel
 // Note: User must be in a voice channel for the bot to access said channel
-func playYT(message string, m *discordgo.MessageCreate, v *VoiceInstance, channelId string, alreadyInChannel bool) {
+func queueYT(message string, m *discordgo.MessageCreate, v *VoiceInstance, channelId string, alreadyInChannel bool) {
 
 	// Split the message to get YT link
 	commData := strings.Split(message, " ")
@@ -113,9 +106,10 @@ func playYT(message string, m *discordgo.MessageCreate, v *VoiceInstance, channe
 			return
 		}
 
+		// Bot joins caller's channel if it's not in it yet.
 		if !alreadyInChannel {
 			v.voice.Speaking(false)
-			s.ChannelMessageSend(m.ChannelID, "[**Bard**] <@"+m.Author.ID+"> - I've joined your channel!")
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** <@"+m.Author.ID+"> - I've joined your channel!")
 		}
 
 		// Get Video Data
@@ -126,6 +120,7 @@ func playYT(message string, m *discordgo.MessageCreate, v *VoiceInstance, channe
 
 		format := video.Formats.FindByQuality("medium") //TODO: Check if lower quality affects music quality
 
+		// Fill Song Info
 		song = Song{
 			ChannelID: m.ChannelID,
 			User:      m.Author.ID,
@@ -136,103 +131,78 @@ func playYT(message string, m *discordgo.MessageCreate, v *VoiceInstance, channe
 			VideoURL:  "",
 		}
 
+		// Message to play or queue a song - v.stop used to see if a song is currently playing.
 		if v.stop {
-			s.ChannelMessageSend(m.ChannelID, "**[Player]** Playing "+song.Title+" :notes:")
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Playing ["+song.Title+"] :notes:")
 		} else {
-			s.ChannelMessageSend(m.ChannelID, "**[Player]** Queued "+song.Title+" :infinity:")
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queued ["+song.Title+"] :infinity:")
 		}
 
 		url, err := client.GetStreamURL(video, format)
 		song.VideoURL = url
+		queue = append(queue, song)
 
-		v.nowPlaying = song
-		v.stop = false
-		v.speaking = true
-
-		v.audioMutex.Lock()
-		defer v.audioMutex.Unlock()
-
-		v.voice.Speaking(true)
-		v.DCA(song.VideoURL)
-		v.stop = true
-		v.speaking = false
+		// Check if a song is already playing, if not start playing the queue
+		if v.nowPlaying == (Song{}) {
+			log.Println("Next song was empty - playing songs")
+			playQueue(m)
+		} else {
+			log.Println("Next song was not empty - song was queued - Playing: ", v.nowPlaying.Title)
+		}
 	}
 }
 
 func stopYT(message string, m *discordgo.MessageCreate, v *VoiceInstance, channelId string) {
-	s.ChannelMessageSend(m.ChannelID, "**[Player]** Stopping "+song.Title+" :octagonal_sign:")
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Stopping ["+v.nowPlaying.Title+"] :octagonal_sign:")
 	v.stop = true
-	v.speaking = false
 
 	if v.encoder != nil {
 		v.encoder.Cleanup()
 	}
-
 }
 
 func skipYT(message string, m *discordgo.MessageCreate, v *VoiceInstance, channelId string) {
-	s.ChannelMessageSend(m.ChannelID, "**[Player]** Skipping "+song.Title+" :loop:")
-	v.stop = true
-	v.speaking = false
+	// Check if a song is playing - If no song, skip this and notify
+	if v.nowPlaying == (Song{}) {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queue is empty - There's nothing to skip!")
+	} else {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Skipping ["+v.nowPlaying.Title+"] :loop:")
+		v.stop = true
+		v.speaking = false
 
-	if v.encoder != nil {
-		v.encoder.Cleanup()
+		if v.encoder != nil {
+			v.encoder.Cleanup()
+		}
+		log.Println("In Skip")
+		log.Println("Queue Length: ", len(queue))
 	}
 }
 
-func uwuYT(message string, m *discordgo.MessageCreate, v *VoiceInstance, channelId string, alreadyInChannel bool) {
-	var err error
+func playQueue(m *discordgo.MessageCreate) {
+	//v.audioMutex.Lock()
+	//defer v.audioMutex.Unlock()
+	for len(queue) > 0 {
+		if len(queue) != 0 {
+			v.nowPlaying, queue = queue[0], queue[1:]
+		} else {
+			v.nowPlaying = Song{}
+			return
+		}
 
-	v.voice, err = s.ChannelVoiceJoin(v.guildID, channelId, false, false)
+		v.stop = false
+		v.voice.Speaking(true)
+		v.DCA(v.nowPlaying.VideoURL)
+		v.stop = true
 
-	if err != nil {
-		log.Println("ERROR: Error to join in a voice channel: ", err)
-		return
+		// Nothing left in queue
+		if len(queue) == 0 {
+			v.nowPlaying = Song{}
+			v.voice.Disconnect()
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing left to play, peace fuckers! :v:")
+		} else {
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Next! Now playing ["+queue[0].Title+"] :loop:")
+		}
 	}
-
-	if !alreadyInChannel {
-		v.voice.Speaking(false)
-		s.ChannelMessageSend(m.ChannelID, "[**Bard**] <@"+m.Author.ID+"> - I've joined your channel!")
-	}
-
-	// Get Video Data
-	video, err := client.GetVideo("https://www.youtube.com/watch?v=rlkSMp7iz6c")
-	if err != nil {
-		panic(err)
-	}
-
-	format := video.Formats.FindByQuality("medium") //TODO: Check if lower quality affects music quality
-
-	song = Song{
-		ChannelID: m.ChannelID,
-		User:      m.Author.ID,
-		ID:        m.ID,
-		VidID:     video.ID,
-		Title:     video.Title,
-		Duration:  video.Duration.String(),
-		VideoURL:  "",
-	}
-
-	if v.stop {
-		s.ChannelMessageSend(m.ChannelID, "**[Player]** UwU "+song.Title+" UwU")
-	} else {
-		s.ChannelMessageSend(m.ChannelID, "**[Player]** Queued UwU "+song.Title+" UwU")
-	}
-
-	url, err := client.GetStreamURL(video, format)
-	song.VideoURL = url
-
-	v.nowPlaying = song
-	v.stop = false
-	v.speaking = true
-
-	v.audioMutex.Lock()
-	defer v.audioMutex.Unlock()
-
-	v.voice.Speaking(true)
-	v.DCA(song.VideoURL)
-	v.stop = true
-	v.speaking = false
 }
 
 func extractor(content string) string {
