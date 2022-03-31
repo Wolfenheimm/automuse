@@ -13,15 +13,12 @@ import (
 )
 
 // Get & queue all videos in a YouTube Playlist
-func queuePlaylist(message string, m *discordgo.MessageCreate, v *VoiceInstance, channelID string, alreadyInChannel bool) {
+func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, channelID string, alreadyInChannel bool) {
 
 	// Split the message to get YT link
 	commData := strings.Split(message, " ")
 
 	if len(commData) == 2 {
-
-		// Get the PlayList ID
-		playlistID := strings.Replace(commData[1], "https://www.youtube.com/playlist?list=", "", -1)
 
 		ytClient := &http.Client{
 			Transport: &transport.APIKey{Key: youtubeToken},
@@ -32,56 +29,74 @@ func queuePlaylist(message string, m *discordgo.MessageCreate, v *VoiceInstance,
 			log.Fatalf("Error creating new YouTube client: %v", err)
 		}
 
-		nextPageToken := ""
-		for {
-			// Retrieve next set of items in the playlist.
-			var snippet = []string{"snippet"}
-			playlistResponse := playlistItemsList(service, snippet, playlistID, nextPageToken)
+		// Multi-video link, is playlist
+		if strings.Contains(m.Content, "list") {
+			// Get the PlayList ID
+			playlistID := strings.Replace(commData[1], "https://www.youtube.com/playlist?list=", "", -1)
+			nextPageToken := ""
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
 
-			for _, playlistItem := range playlistResponse.Items {
-				videoId := playlistItem.Snippet.ResourceId.VideoId
-				log.Println("VideoID: " + videoId)
-				content := "https://www.youtube.com/watch?v=" + videoId
+			for {
+				// Retrieve next set of items in the playlist.
+				var snippet = []string{"snippet"}
+				playlistResponse := playlistItemsList(service, snippet, playlistID, nextPageToken)
 
-				// Get Video Data
-				video, err := client.GetVideo(content)
-				if err != nil {
-					log.Println(err)
-				} else {
+				for _, playlistItem := range playlistResponse.Items {
+					videoId := playlistItem.Snippet.ResourceId.VideoId
+					log.Println("VideoID: " + videoId)
+					content := "https://www.youtube.com/watch?v=" + videoId
 
-					format := video.Formats.WithAudioChannels() // Get matches with audio channels only
-
-					// Fill Song Info
-					song = Song{
-						ChannelID: m.ChannelID,
-						User:      m.Author.ID,
-						ID:        m.ID,
-						VidID:     video.ID,
-						Title:     video.Title,
-						Duration:  video.Duration.String(),
-						VideoURL:  "",
-					}
-
-					url, err := client.GetStreamURL(video, &format[0])
+					// Get Video Data
+					video, err := client.GetVideo(content)
 					if err != nil {
 						log.Println(err)
 					} else {
-						song.VideoURL = url
-						queue = append(queue, song)
+
+						format := video.Formats.WithAudioChannels() // Get matches with audio channels only
+
+						song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.ID, video.Title, video.Duration.String())
+
+						url, err := client.GetStreamURL(video, &format[0])
+						if err != nil {
+							log.Println(err)
+						} else {
+							song.VideoURL = url
+							queue = append(queue, song)
+						}
 					}
 				}
-			}
 
-			// Set the token to retrieve the next page of results
-			// or exit the loop if all results have been retrieved.
-			nextPageToken = playlistResponse.NextPageToken
-			if nextPageToken == "" {
-				break
+				// Set the token to retrieve the next page of results
+				nextPageToken = playlistResponse.NextPageToken
+
+				// Nothing left, break out
+				if nextPageToken == "" {
+					break
+				}
+			}
+		} else {
+			// Single video link (not a playlist)
+			video, err := client.GetVideo(commData[1])
+			if err != nil {
+				log.Println(err)
+			} else {
+
+				format := video.Formats.WithAudioChannels() // Get matches with audio channels only
+
+				// Fill Song Info
+				song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.ID, video.Title, video.Duration.String())
+
+				url, err := client.GetStreamURL(video, &format[0])
+				if err != nil {
+					log.Println(err)
+				} else {
+					song.VideoURL = url
+					queue = append(queue, song)
+				}
 			}
 		}
 
 		if v.nowPlaying == (Song{}) {
-			log.Println("Next song was empty - playing songs")
 			v.voice, err = s.ChannelVoiceJoin(v.guildID, channelID, false, false)
 
 			if err != nil {
@@ -94,81 +109,12 @@ func queuePlaylist(message string, m *discordgo.MessageCreate, v *VoiceInstance,
 				v.voice.Speaking(false)
 				s.ChannelMessageSend(m.ChannelID, "**[Muse]** <@"+m.Author.ID+"> - I've joined your channel!")
 			}
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queing Your PlayList... :infinity:")
+
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Playing ["+queue[0].Title+"] :notes:")
 			playQueue(m)
 		} else {
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queued a PlayList... :infinity:")
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queued... :infinity:")
 			getQueue(m)
-			log.Println("Next song was not empty - song was queued - Playing: ", v.nowPlaying.Title)
-		}
-	}
-}
-
-// Play Youtube Music in Channel
-// Note: User must be in a voice channel for the bot to access said channel
-func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, channelId string, alreadyInChannel bool) {
-
-	// Split the message to get YT link
-	commData := strings.Split(message, " ")
-
-	if len(commData) == 2 {
-		var err error
-
-		v.voice, err = s.ChannelVoiceJoin(v.guildID, channelId, false, false)
-
-		if err != nil {
-			log.Println("ERROR: Error to join in a voice channel: ", err)
-			return
-		}
-
-		// Bot joins caller's channel if it's not in it yet.
-		if !alreadyInChannel {
-			v.voice.Speaking(false)
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** <@"+m.Author.ID+"> - I've joined your channel!")
-		}
-
-		// Get Video Data
-		video, err := client.GetVideo(commData[1])
-		if err != nil {
-			log.Println(err)
-		} else {
-
-			format := video.Formats.WithAudioChannels() // Get matches with audio channels only
-
-			// Fill Song Info
-			song = Song{
-				ChannelID: m.ChannelID,
-				User:      m.Author.ID,
-				ID:        m.ID,
-				VidID:     video.ID,
-				Title:     video.Title,
-				Duration:  video.Duration.String(),
-				VideoURL:  "",
-			}
-
-			// Message to play or queue a song - v.stop used to see if a song is currently playing.
-			if v.stop {
-				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Playing ["+song.Title+"] :notes:")
-			} else {
-				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queued ["+song.Title+"] :infinity:")
-			}
-
-			url, err := client.GetStreamURL(video, &format[0])
-			if err != nil {
-				log.Println(err)
-			} else {
-				song.VideoURL = url
-				queue = append(queue, song)
-
-				// Check if a song is already playing, if not start playing the queue
-				if v.nowPlaying == (Song{}) {
-					log.Println("Next song was empty - playing songs")
-					playQueue(m)
-				} else {
-					log.Println("Next song was not empty - song was queued - Playing: ", v.nowPlaying.Title)
-				}
-			}
 		}
 	}
 }

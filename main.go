@@ -59,12 +59,8 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// Commands
 	if m.Content != "" {
-		if strings.Contains(m.Content, "play") && strings.Contains(m.Content, "youtube") && !strings.Contains(m.Content, "list") {
+		if strings.Contains(m.Content, "play") && strings.Contains(m.Content, "youtube") {
 			go queueSong(m.Content, m, v, voiceChannelID, channel)
-		}
-
-		if strings.Contains(m.Content, "play") && strings.Contains(m.Content, "youtube") && strings.Contains(m.Content, "list") {
-			go queuePlaylist(m.Content, m, v, voiceChannelID, channel)
 		}
 
 		if m.Content == "stop" {
