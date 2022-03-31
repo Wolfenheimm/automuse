@@ -20,6 +20,7 @@ func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, cha
 
 	if len(commData) == 2 {
 
+		// This client is used to search playlists
 		ytClient := &http.Client{
 			Transport: &transport.APIKey{Key: youtubeToken},
 		}
@@ -29,11 +30,10 @@ func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, cha
 			log.Fatalf("Error creating new YouTube client: %v", err)
 		}
 
-		// Multi-video link, is playlist
+		// If playlist.... TODO: Error checking on the link
 		if strings.Contains(m.Content, "list") {
-			// Get the PlayList ID
 			playlistID := strings.Replace(commData[1], "https://www.youtube.com/playlist?list=", "", -1)
-			nextPageToken := ""
+			nextPageToken := "" // Used to iterate through videos in a playlist
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
 
 			for {
@@ -43,7 +43,6 @@ func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, cha
 
 				for _, playlistItem := range playlistResponse.Items {
 					videoId := playlistItem.Snippet.ResourceId.VideoId
-					log.Println("VideoID: " + videoId)
 					content := "https://www.youtube.com/watch?v=" + videoId
 
 					// Get Video Data
@@ -51,12 +50,10 @@ func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, cha
 					if err != nil {
 						log.Println(err)
 					} else {
-
 						format := video.Formats.WithAudioChannels() // Get matches with audio channels only
-
 						song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.ID, video.Title, video.Duration.String())
-
 						url, err := client.GetStreamURL(video, &format[0])
+
 						if err != nil {
 							log.Println(err)
 						} else {
