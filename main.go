@@ -78,6 +78,10 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if m.Content == "queue" {
 			go getQueue(m)
 		}
+
+		if strings.Contains(m.Content, "remove") {
+			go removeFromQueue(m.Content, m)
+		}
 	} else {
 		return
 	}

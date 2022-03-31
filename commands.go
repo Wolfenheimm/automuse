@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -187,10 +188,11 @@ func stopSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, chan
 
 func skipSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, channelId string) {
 	// Check if a song is playing - If no song, skip this and notify
+	var replyMessage string
 	if v.nowPlaying == (Song{}) {
-		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queue is empty - There's nothing to skip!")
+		replyMessage = "**[Muse]** Queue is empty - There's nothing to skip!"
 	} else {
-		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Skipping ["+v.nowPlaying.Title+"] :loop:")
+		replyMessage = fmt.Sprintf("**[Muse]** Skipping [%s] :loop:", v.nowPlaying.Title)
 		v.stop = true
 		v.speaking = false
 
@@ -200,6 +202,7 @@ func skipSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, chan
 		log.Println("Skipping " + v.nowPlaying.Title)
 		log.Println("Queue Length: ", len(queue)-1)
 	}
+	s.ChannelMessageSend(m.ChannelID, replyMessage)
 }
 
 func getQueue(m *discordgo.MessageCreate) {
@@ -213,6 +216,32 @@ func getQueue(m *discordgo.MessageCreate) {
 
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Fetching Queue...")
 	s.ChannelMessageSend(m.ChannelID, queueList)
+}
+
+func removeFromQueue(message string, m *discordgo.MessageCreate) {
+	// Split the message to get which song to remove from the queue
+	commData := strings.Split(message, " ")
+	var msgToUser string
+	if len(commData) == 2 {
+		if queuePos, err := strconv.Atoi(commData[1]); err == nil {
+			if queue != nil {
+				if 1 <= queuePos && queuePos <= len(queue) {
+					queuePos--
+					var songTitle = queue[queuePos].Title
+					var tmpQueue []Song
+					tmpQueue = queue[:queuePos]
+					tmpQueue = append(tmpQueue, queue[queuePos+1:]...)
+					queue = tmpQueue
+					msgToUser = fmt.Sprintf("**[Muse]** Removed %s.", songTitle)
+				} else {
+					msgToUser = "**[Muse]** The selection was out of range."
+				}
+			} else {
+				msgToUser = "**[Muse]** There is no queue to remove songs from."
+			}
+		}
+		s.ChannelMessageSend(m.ChannelID, msgToUser)
+	}
 }
 
 func playQueue(m *discordgo.MessageCreate) {

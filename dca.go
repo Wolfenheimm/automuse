@@ -10,7 +10,7 @@ import (
 func (v *VoiceInstance) DCA(url string) {
 	opts := dca.StdEncodeOptions
 	opts.RawOutput = true
-	opts.Bitrate = 96
+	opts.Bitrate = 128
 	opts.Application = "lowdelay"
 
 	encodeSession, err := dca.EncodeFile(url, opts)
