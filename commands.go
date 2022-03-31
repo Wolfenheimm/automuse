@@ -48,7 +48,7 @@ func queuePlaylist(message string, m *discordgo.MessageCreate, v *VoiceInstance,
 					log.Println(err)
 				} else {
 
-					format := video.Formats.FindByQuality("medium") //TODO: Check if lower quality affects music quality
+					format := video.Formats.WithAudioChannels() // Get matches with audio channels only
 
 					// Fill Song Info
 					song = Song{
@@ -61,7 +61,7 @@ func queuePlaylist(message string, m *discordgo.MessageCreate, v *VoiceInstance,
 						VideoURL:  "",
 					}
 
-					url, err := client.GetStreamURL(video, format)
+					url, err := client.GetStreamURL(video, &format[0])
 					if err != nil {
 						log.Println(err)
 					} else {
@@ -133,7 +133,7 @@ func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, cha
 			log.Println(err)
 		} else {
 
-			format := video.Formats.FindByQuality("medium") //TODO: Check if lower quality affects music quality
+			format := video.Formats.WithAudioChannels() // Get matches with audio channels only
 
 			// Fill Song Info
 			song = Song{
@@ -153,7 +153,7 @@ func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, cha
 				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queued ["+song.Title+"] :infinity:")
 			}
 
-			url, err := client.GetStreamURL(video, format)
+			url, err := client.GetStreamURL(video, &format[0])
 			if err != nil {
 				log.Println(err)
 			} else {
@@ -197,8 +197,8 @@ func skipSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, chan
 		if v.encoder != nil {
 			v.encoder.Cleanup()
 		}
-		log.Println("In Skip")
-		log.Println("Queue Length: ", len(queue))
+		log.Println("Skipping " + v.nowPlaying.Title)
+		log.Println("Queue Length: ", len(queue)-1)
 	}
 }
 
