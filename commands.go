@@ -3,13 +3,10 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"google.golang.org/api/googleapi/transport"
-	"google.golang.org/api/youtube/v3"
 )
 
 // Get & queue all videos in a YouTube Playlist
@@ -19,58 +16,11 @@ func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, cha
 	commData := strings.Split(message, " ")
 
 	if len(commData) == 2 {
-
-		// This client is used to search playlists
-		ytClient := &http.Client{
-			Transport: &transport.APIKey{Key: youtubeToken},
-		}
-
-		service, err := youtube.New(ytClient)
-		if err != nil {
-			log.Fatalf("Error creating new YouTube client: %v", err)
-		}
-
 		// If playlist.... TODO: Error checking on the link
 		if strings.Contains(m.Content, "list") {
 			playlistID := strings.Replace(commData[1], "https://www.youtube.com/playlist?list=", "", -1)
-			nextPageToken := "" // Used to iterate through videos in a playlist
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
-
-			for {
-				// Retrieve next set of items in the playlist.
-				var snippet = []string{"snippet"}
-				playlistResponse := playlistItemsList(service, snippet, playlistID, nextPageToken)
-
-				for _, playlistItem := range playlistResponse.Items {
-					videoId := playlistItem.Snippet.ResourceId.VideoId
-					content := "https://www.youtube.com/watch?v=" + videoId
-
-					// Get Video Data
-					video, err := client.GetVideo(content)
-					if err != nil {
-						log.Println(err)
-					} else {
-						format := video.Formats.WithAudioChannels() // Get matches with audio channels only
-						song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.ID, video.Title, video.Duration.String())
-						url, err := client.GetStreamURL(video, &format[0])
-
-						if err != nil {
-							log.Println(err)
-						} else {
-							song.VideoURL = url
-							queue = append(queue, song)
-						}
-					}
-				}
-
-				// Set the token to retrieve the next page of results
-				nextPageToken = playlistResponse.NextPageToken
-
-				// Nothing left, break out
-				if nextPageToken == "" {
-					break
-				}
-			}
+			go queuePlaylist(playlistID, m)
 		} else {
 			// Single video link (not a playlist)
 			video, err := client.GetVideo(commData[1])
@@ -94,6 +44,7 @@ func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, cha
 		}
 
 		if v.nowPlaying == (Song{}) {
+			var err error
 			v.voice, err = s.ChannelVoiceJoin(v.guildID, channelID, false, false)
 
 			if err != nil {
