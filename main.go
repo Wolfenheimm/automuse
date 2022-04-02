@@ -46,29 +46,21 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// Setup Channel Information
 	guildID := SearchGuild(m.ChannelID)
-	channel := false
-
-	// Check if the request was made from a person in the same channel the bot is currently in
-	if voiceChannelID == SearchVoiceChannel(m.Author.ID) {
-		channel = true
-	}
-
-	voiceChannelID = SearchVoiceChannel(m.Author.ID)
 	v.guildID = guildID
 	v.session = s
 
 	// Commands
 	if m.Content != "" {
 		if strings.Contains(m.Content, "play") && strings.Contains(m.Content, "youtube") {
-			go queueSong(m.Content, m, v, voiceChannelID, channel)
+			go queueSong(m.Content, m, v)
 		}
 
 		if m.Content == "stop" {
-			go stopSong(m.Content, m, v, voiceChannelID)
+			go stopSong(m.Content, m, v)
 		}
 
 		if m.Content == "skip" {
-			go skipSong(m.Content, m, v, voiceChannelID)
+			go skipSong(m.Content, m, v)
 		}
 
 		if m.Content == "queue" {

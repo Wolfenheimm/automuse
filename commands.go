@@ -10,17 +10,17 @@ import (
 )
 
 // Get & queue all videos in a YouTube Playlist
-func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, channelID string, alreadyInChannel bool) {
+func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance) {
 
 	// Split the message to get YT link
 	commData := strings.Split(message, " ")
-
+	queueLenBefore := len(queue)
 	if len(commData) == 2 {
 		// If playlist.... TODO: Error checking on the link
 		if strings.Contains(m.Content, "list") {
 			playlistID := strings.Replace(commData[1], "https://www.youtube.com/playlist?list=", "", -1)
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
-			go queuePlaylist(playlistID, m)
+			queuePlaylist(playlistID, m)
 		} else {
 			// Single video link (not a playlist)
 			video, err := client.GetVideo(commData[1])
@@ -43,17 +43,22 @@ func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, cha
 			}
 		}
 
-		if v.nowPlaying == (Song{}) {
-			var err error
-			v.voice, err = s.ChannelVoiceJoin(v.guildID, channelID, false, false)
+		// If there's nothing playing and the queue grew
+		if v.nowPlaying == (Song{}) && len(queue) >= 1 {
 
-			if err != nil {
-				log.Println("ERROR: Error to join in a voice channel: ", err)
-				return
-			}
+			// Get the channel of the person who made the request
+			authorChan := SearchVoiceChannel(m.Author.ID)
 
-			// Bot joins caller's channel if it's not in it yet.
-			if !alreadyInChannel {
+			// Join the channel of the person who made the request
+			if authorChan != m.ChannelID {
+				var err error
+				v.voice, err = s.ChannelVoiceJoin(v.guildID, authorChan, false, false)
+
+				if err != nil {
+					log.Println("ERROR: Error to join in a voice channel: ", err)
+					return
+				}
+
 				v.voice.Speaking(false)
 				s.ChannelMessageSend(m.ChannelID, "**[Muse]** <@"+m.Author.ID+"> - I've joined your channel!")
 			}
@@ -61,13 +66,17 @@ func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, cha
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Playing ["+queue[0].Title+"] :notes:")
 			playQueue(m)
 		} else {
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queued... :infinity:")
-			getQueue(m)
+			// Only display queue if it grew in size...
+			if queueLenBefore < len(queue) {
+				getQueue(m)
+			} else {
+				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing was added...")
+			}
 		}
 	}
 }
 
-func stopSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, channelId string) {
+func stopSong(message string, m *discordgo.MessageCreate, v *VoiceInstance) {
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Stopping ["+v.nowPlaying.Title+"] & Clearing Queue :octagonal_sign:")
 	v.stop = true
 
@@ -80,7 +89,7 @@ func stopSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, chan
 	v.voice.Disconnect()
 }
 
-func skipSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, channelId string) {
+func skipSong(message string, m *discordgo.MessageCreate, v *VoiceInstance) {
 	// Check if a song is playing - If no song, skip this and notify
 	var replyMessage string
 	if v.nowPlaying == (Song{}) {
@@ -100,16 +109,23 @@ func skipSong(message string, m *discordgo.MessageCreate, v *VoiceInstance, chan
 }
 
 func getQueue(m *discordgo.MessageCreate) {
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Fetching Queue...")
 	queueList := ":musical_note:   QUEUE LIST   :musical_note:\n"
+
 	if v.nowPlaying != (Song{}) {
 		queueList = queueList + "Now Playing: " + v.nowPlaying.Title + "  ->  Queued by <@" + v.nowPlaying.User + "> \n"
 	}
+
 	for index, element := range queue {
 		queueList = queueList + " " + strconv.Itoa(index+1) + ". " + element.Title + "  ->  Queued by <@" + element.User + "> \n"
+		if index+1 == 14 {
+			s.ChannelMessageSend(m.ChannelID, queueList)
+			queueList = ""
+		}
 	}
 
-	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Fetching Queue...")
 	s.ChannelMessageSend(m.ChannelID, queueList)
+	log.Println(queueList)
 }
 
 func removeFromQueue(message string, m *discordgo.MessageCreate) {
@@ -153,12 +169,12 @@ func playQueue(m *discordgo.MessageCreate) {
 		v.stop = true
 
 		// Nothing left in queue
-		if len(queue) == 0 {
-			v.nowPlaying = Song{}
-			v.voice.Disconnect()
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing left to play, peace! :v:")
-		} else {
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Next! Now playing ["+queue[0].Title+"] :loop:")
-		}
+
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Next! Now playing ["+queue[0].Title+"] :loop:")
 	}
+
+	v.nowPlaying = Song{}
+	v.voice.Disconnect()
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing left to play, peace! :v:")
+
 }
