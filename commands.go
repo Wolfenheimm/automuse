@@ -70,7 +70,12 @@ func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance) {
 			if queueLenBefore < len(queue) {
 				getQueue(m)
 			} else {
-				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing was added, playlist or song was empty...")
+				nothingAddedMessage := "**[Muse]** Nothing was added, playlist or song was empty...\n"
+				nothingAddedMessage = nothingAddedMessage + "Note:\n"
+				nothingAddedMessage = nothingAddedMessage + "- Playlists should have the following url structure: <https://www.youtube.com/playlist?list=><PLAYLIST IDENTIFIER>\n"
+				nothingAddedMessage = nothingAddedMessage + "- Videos should have the following url structure: <https://www.youtube.com/watch?v=><VIDEO IDENTIFIER>\n"
+				nothingAddedMessage = nothingAddedMessage + "- Youtu.be links or links set at a certain time (t=#s) have not been implemented - sorry!"
+				s.ChannelMessageSend(m.ChannelID, nothingAddedMessage)
 			}
 		}
 	}
