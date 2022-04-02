@@ -70,7 +70,7 @@ func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance) {
 			if queueLenBefore < len(queue) {
 				getQueue(m)
 			} else {
-				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing was added...")
+				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing was added, playlist or song was empty...")
 			}
 		}
 	}
@@ -168,9 +168,10 @@ func playQueue(m *discordgo.MessageCreate) {
 		v.DCA(v.nowPlaying.VideoURL)
 		v.stop = true
 
-		// Nothing left in queue
-
-		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Next! Now playing ["+queue[0].Title+"] :loop:")
+		// Nothing left in queue - Check if song(s) wasn't/weren't added to queue
+		if queue[0].Title != "" {
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Next! Now playing ["+queue[0].Title+"] :loop:")
+		}
 	}
 
 	v.nowPlaying = Song{}
