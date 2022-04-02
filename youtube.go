@@ -18,7 +18,12 @@ func playlistItemsList(service *youtube.Service, part []string, playlistId strin
 	}
 	response, err := call.Do()
 	log.Println(err)
-	return response
+
+	if err != nil {
+		return &youtube.PlaylistItemListResponse{}
+	} else {
+		return response
+	}
 }
 
 func queuePlaylist(playlistID string, m *discordgo.MessageCreate) {
