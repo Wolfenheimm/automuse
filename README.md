@@ -30,5 +30,5 @@ play https://www.youtube.com/playlist?list=<PLAYLIST-ID> -> Plays/Queues a playl
 skip                                                     -> Skips the current Song
 stop                                                     -> Stops the current song and clears the queue
 queue                                                    -> Shows the current queue in chat
-remove #                                                 -> Remove a song from the queue at a given # (number)
+remove #                                                 -> Remove a song from queue at number #
 ````
