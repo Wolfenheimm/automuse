@@ -173,8 +173,7 @@ func playQueue(m *discordgo.MessageCreate) {
 		v.DCA(v.nowPlaying.VideoURL)
 		v.stop = true
 
-		log.Println(queue)
-		// Nothing left in queue - Check if song(s) wasn't/weren't added to queue
+		// Queue not empty, next song isn't empty (incase nil song in queue)
 		if len(queue) != 0 && queue[0].Title != "" {
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Next! Now playing ["+queue[0].Title+"] :loop:")
 		}
