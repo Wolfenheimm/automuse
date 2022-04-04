@@ -9,9 +9,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// Get & queue all videos in a YouTube Playlist
-func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance) {
-
+// Get & queue audio in a YouTube video / playlist
+func queueSong(message string, m *discordgo.MessageCreate) {
 	// Split the message to get YT link
 	commData := strings.Split(message, " ")
 	queueLenBefore := len(queue)
@@ -64,11 +63,11 @@ func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance) {
 			}
 
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Playing ["+queue[0].Title+"] :notes:")
-			playQueue(m)
+			playQueue(m.ChannelID)
 		} else {
 			// Only display queue if it grew in size...
 			if queueLenBefore < len(queue) {
-				getQueue(m)
+				getQueue(m.ChannelID)
 			} else {
 				nothingAddedMessage := "**[Muse]** Nothing was added, playlist or song was empty...\n"
 				nothingAddedMessage = nothingAddedMessage + "Note:\n"
@@ -81,7 +80,8 @@ func queueSong(message string, m *discordgo.MessageCreate, v *VoiceInstance) {
 	}
 }
 
-func stopSong(message string, m *discordgo.MessageCreate, v *VoiceInstance) {
+// Stops current song and empties the queue
+func stopAll(message string, m *discordgo.MessageCreate) {
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Stopping ["+v.nowPlaying.Title+"] & Clearing Queue :octagonal_sign:")
 	v.stop = true
 
@@ -94,7 +94,8 @@ func stopSong(message string, m *discordgo.MessageCreate, v *VoiceInstance) {
 	v.voice.Disconnect()
 }
 
-func skipSong(message string, m *discordgo.MessageCreate, v *VoiceInstance) {
+// Skips the current song
+func skipSong(message string, channelID string) {
 	// Check if a song is playing - If no song, skip this and notify
 	var replyMessage string
 	if v.nowPlaying == (Song{}) {
@@ -110,11 +111,12 @@ func skipSong(message string, m *discordgo.MessageCreate, v *VoiceInstance) {
 		log.Println("Skipping " + v.nowPlaying.Title)
 		log.Println("Queue Length: ", len(queue)-1)
 	}
-	s.ChannelMessageSend(m.ChannelID, replyMessage)
+	s.ChannelMessageSend(channelID, replyMessage)
 }
 
-func getQueue(m *discordgo.MessageCreate) {
-	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Fetching Queue...")
+// Fetches and displays the queue
+func getQueue(channelID string) {
+	s.ChannelMessageSend(channelID, "**[Muse]** Fetching Queue...")
 	queueList := ":musical_note:   QUEUE LIST   :musical_note:\n"
 
 	if v.nowPlaying != (Song{}) {
@@ -124,16 +126,17 @@ func getQueue(m *discordgo.MessageCreate) {
 	for index, element := range queue {
 		queueList = queueList + " " + strconv.Itoa(index+1) + ". " + element.Title + "  ->  Queued by <@" + element.User + "> \n"
 		if index+1 == 14 {
-			s.ChannelMessageSend(m.ChannelID, queueList)
+			s.ChannelMessageSend(channelID, queueList)
 			queueList = ""
 		}
 	}
 
-	s.ChannelMessageSend(m.ChannelID, queueList)
+	s.ChannelMessageSend(channelID, queueList)
 	log.Println(queueList)
 }
 
-func removeFromQueue(message string, m *discordgo.MessageCreate) {
+// Removes a song from the queue at a specific position
+func removeFromQueue(message string, channelID string) {
 	// Split the message to get which song to remove from the queue
 	commData := strings.Split(message, " ")
 	var msgToUser string
@@ -155,11 +158,12 @@ func removeFromQueue(message string, m *discordgo.MessageCreate) {
 				msgToUser = "**[Muse]** There is no queue to remove songs from."
 			}
 		}
-		s.ChannelMessageSend(m.ChannelID, msgToUser)
+		s.ChannelMessageSend(channelID, msgToUser)
 	}
 }
 
-func playQueue(m *discordgo.MessageCreate) {
+// Plays the queue
+func playQueue(channelID string) {
 	for len(queue) > 0 {
 		if len(queue) != 0 {
 			v.nowPlaying, queue = queue[0], queue[1:]
@@ -175,13 +179,12 @@ func playQueue(m *discordgo.MessageCreate) {
 
 		// Queue not empty, next song isn't empty (incase nil song in queue)
 		if len(queue) != 0 && queue[0].Title != "" {
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Next! Now playing ["+queue[0].Title+"] :loop:")
+			s.ChannelMessageSend(channelID, "**[Muse]** Next! Now playing ["+queue[0].Title+"] :loop:")
 		}
 	}
 
 	// No more songs in the queue, reset the queue + leave channel
 	v.nowPlaying = Song{}
 	v.voice.Disconnect()
-	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing left to play, peace! :v:")
-
+	s.ChannelMessageSend(channelID, "**[Muse]** Nothing left to play, peace! :v:")
 }

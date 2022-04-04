@@ -7,6 +7,7 @@ import (
 	"github.com/jonas747/dca"
 )
 
+// Encodes the video for audio playback
 func (v *VoiceInstance) DCA(url string) {
 	opts := dca.StdEncodeOptions
 	opts.RawOutput = true

@@ -52,23 +52,23 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Commands
 	if m.Content != "" {
 		if strings.Contains(m.Content, "play") && strings.Contains(m.Content, "youtube") {
-			go queueSong(m.Content, m, v)
+			go queueSong(m.Content, m)
 		}
 
 		if m.Content == "stop" {
-			go stopSong(m.Content, m, v)
+			go stopAll(m.Content, m)
 		}
 
 		if m.Content == "skip" {
-			go skipSong(m.Content, m, v)
+			go skipSong(m.Content, m.ChannelID)
 		}
 
 		if m.Content == "queue" {
-			go getQueue(m)
+			go getQueue(m.ChannelID)
 		}
 
 		if strings.Contains(m.Content, "remove") {
-			go removeFromQueue(m.Content, m)
+			go removeFromQueue(m.Content, m.ChannelID)
 		}
 	} else {
 		return

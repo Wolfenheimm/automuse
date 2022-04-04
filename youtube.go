@@ -26,6 +26,7 @@ func playlistItemsList(service *youtube.Service, part []string, playlistId strin
 	}
 }
 
+// Queue the playlist - Gets the playlist ID and searches for all individual videos & queue's them
 func queuePlaylist(playlistID string, m *discordgo.MessageCreate) {
 	// This client is used to search playlists
 	ytClient := &http.Client{
