@@ -23,7 +23,9 @@ func init() {
 
 func main() {
 	// Add function handlers to trigger commands from discord chat
-	s.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) { log.Println("Automuse is running!") })
+	s.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
+		log.Println("You should be the one running you fat shit...")
+	})
 	s.AddHandler(executionHandler)
 
 	err := s.Open()
