@@ -1,11 +1,11 @@
 package main
 
 import (
+	"context"
 	"log"
-	"net/http"
 
 	"github.com/bwmarrin/discordgo"
-	"google.golang.org/api/googleapi/transport"
+	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
 )
 
@@ -28,12 +28,9 @@ func playlistItemsList(service *youtube.Service, part []string, playlistId strin
 
 // Queue the playlist - Gets the playlist ID and searches for all individual videos & queue's them
 func queuePlaylist(playlistID string, m *discordgo.MessageCreate) {
-	// This client is used to search playlists
-	ytClient := &http.Client{
-		Transport: &transport.APIKey{Key: youtubeToken},
-	}
 
-	service, err := youtube.New(ytClient)
+	ctx := context.Background()
+	service, err := youtube.NewService(ctx, option.WithAPIKey(youtubeToken))
 	if err != nil {
 		log.Fatalf("Error creating new YouTube client: %v", err)
 	}

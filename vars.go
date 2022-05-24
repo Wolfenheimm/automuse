@@ -9,7 +9,6 @@ import (
 var (
 	botToken     string
 	youtubeToken string
-	dg           *discordgo.Session
 	s            *discordgo.Session
 	v            = new(VoiceInstance)
 	client       = yt.Client{Debug: true}

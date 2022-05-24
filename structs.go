@@ -30,9 +30,7 @@ type VoiceInstance struct {
 	encoder    *dca.EncodeSession
 	stream     *dca.StreamingSession
 	nowPlaying Song
-	queue      []Song
 	guildID    string
-	channelID  string
 	speaking   bool
 	stop       bool
 }
