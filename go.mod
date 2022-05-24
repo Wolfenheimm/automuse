@@ -32,6 +32,4 @@ require (
 	google.golang.org/protobuf v1.28.0 // indirect
 )
 
-replace github.com/kkdai/youtuve/v2 => ../youtube
-
 replace github.com/kkdai/youtube/v2 => ../youtube
