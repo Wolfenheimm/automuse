@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 
@@ -33,6 +34,7 @@ func (v *VoiceInstance) DCA(url string) {
 		// Hit EOF, cleanup & stop
 		if err == io.EOF {
 			// Clean up incase something happened and ffmpeg is still running
+			fmt.Printf("Should stop the song...")
 			encodeSession.Cleanup()
 			break
 		}

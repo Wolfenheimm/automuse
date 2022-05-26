@@ -104,10 +104,7 @@ func skipSong(m *discordgo.MessageCreate) {
 		replyMessage = fmt.Sprintf("**[Muse]** Skipping [%s] :loop:", v.nowPlaying.Title)
 		v.stop = true
 		v.speaking = false
-
-		if v.encoder != nil {
-			v.encoder.Cleanup()
-		}
+		v.encoder.Cleanup()
 		log.Println("Skipping " + v.nowPlaying.Title)
 		log.Println("Queue Length: ", len(queue)-1)
 	}
@@ -175,7 +172,6 @@ func playQueue(m *discordgo.MessageCreate) {
 		v.stop = false
 		v.voice.Speaking(true)
 		v.DCA(v.nowPlaying.VideoURL)
-		v.stop = true
 
 		// Queue not empty, next song isn't empty (incase nil song in queue)
 		if len(queue) != 0 && queue[0].Title != "" {
@@ -184,6 +180,7 @@ func playQueue(m *discordgo.MessageCreate) {
 	}
 
 	// No more songs in the queue, reset the queue + leave channel
+	v.stop = true
 	v.nowPlaying = Song{}
 	v.voice.Disconnect()
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing left to play, peace! :v:")
