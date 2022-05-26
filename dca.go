@@ -11,7 +11,7 @@ import (
 func (v *VoiceInstance) DCA(url string) {
 	opts := dca.StdEncodeOptions
 	opts.RawOutput = true
-	opts.Bitrate = 86
+	opts.Bitrate = 94
 	opts.Application = "lowdelay"
 
 	encodeSession, err := dca.EncodeFile(url, opts)
@@ -23,15 +23,18 @@ func (v *VoiceInstance) DCA(url string) {
 	done := make(chan error)
 	stream := dca.NewStream(encodeSession, v.voice, done)
 	v.stream = stream
-	for {
-		select {
-		case err := <-done:
-			if err != nil && err != io.EOF {
-				log.Println("FATA: An error occured", err)
-			}
+	for err := range done {
+
+		// Something horrible happened...
+		if err != nil && err != io.EOF {
+			log.Println("FATA: An error occured", err)
+		}
+
+		// Hit EOF, cleanup & stop
+		if err == io.EOF {
 			// Clean up incase something happened and ffmpeg is still running
 			encodeSession.Cleanup()
-			return
+			break
 		}
 	}
 }
