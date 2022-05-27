@@ -33,7 +33,9 @@ func (v *VoiceInstance) DCA(url string) {
 		// Hit EOF, cleanup & stop
 		if err == io.EOF {
 			// Clean up incase something happened and ffmpeg is still running
-			encodeSession.Cleanup()
+			if v.encoder != nil {
+				v.encoder.Cleanup()
+			}
 			break
 		}
 	}

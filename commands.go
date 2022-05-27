@@ -182,6 +182,6 @@ func playQueue(m *discordgo.MessageCreate) {
 	// No more songs in the queue, reset the queue + leave channel
 	v.stop = true
 	v.nowPlaying = Song{}
-	v.voice.Disconnect()
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing left to play, peace! :v:")
+	v.voice.Disconnect()
 }
