@@ -17,23 +17,17 @@ func queueSong(m *discordgo.MessageCreate) {
 
 	queueLenBefore := len(queue)
 	if commDataIsValid {
+		// Check if a youtube link is present
 		if strings.Contains(m.Content, "https://www.youtube") {
+			// Check if the link is a playlist or a simple video
 			if strings.Contains(m.Content, "list") && strings.Contains(m.Content, "-pl") || strings.Contains(m.Content, "/playlist?") {
+				// Only use lists starting with PL (Playlist only, lists are local to your own feed and cannot be used)
 				if strings.Contains(m.Content, "list=PL") {
+					// The url must be the second or third parameter
 					if len(commData) == 2 {
-						if strings.Contains(commData[1], "list=") {
-							println(m.Content)
-							playlistID := strings.SplitN(commData[1], "list=", 2)[1]
-							s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
-							queuePlaylist(playlistID, m)
-						}
+						prepPlaylist(commData[1], m)
 					} else if len(commData) == 3 {
-						if strings.Contains(commData[2], "list=") {
-							println(m.Content)
-							playlistID := strings.SplitN(commData[2], "list=", 2)[1]
-							s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
-							queuePlaylist(playlistID, m)
-						}
+						prepPlaylist(commData[2], m)
 					} else {
 						s.ChannelMessageSend(m.ChannelID, "**[Muse]** The url must be the second or third parameter")
 					}
@@ -211,14 +205,19 @@ func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
 		}
 		msgData = tmp
 
+		// The message data was empty - normally due to a user typing a word containing play
+		if msgData == nil {
+			return msgData, false
+		}
+
 		// First command MUST be play, this should always happen...
 		if msgData[0] != "play" {
-			commandPass = false
+			return msgData, false
 		}
 
 		if len(msgData) == 1 {
-			commandPass = false
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Insufficiant parameters!")
+			return msgData, false
 		}
 
 		// If the input was numeric, it is assumed the user is selecting from the queue or search results
@@ -255,4 +254,13 @@ func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
 	}
 
 	return msgData, isValid
+}
+
+func prepPlaylist(message string, m *discordgo.MessageCreate) {
+	if strings.Contains(message, "list=") {
+		println(m.Content)
+		playlistID := strings.SplitN(message, "list=", 2)[1]
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
+		queuePlaylist(playlistID, m)
+	}
 }
