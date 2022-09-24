@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -19,7 +18,6 @@ var (
 func searchQueryList(req string) map[string]string {
 	// Make the API call to YouTube.
 	var part = []string{"id", "snippet"}
-	ctx := context.Background()
 	service, yterr := youtube.NewService(ctx, option.WithAPIKey(youtubeToken))
 	if yterr != nil {
 		log.Fatalf("Error creating new YouTube client: %v", yterr)
@@ -68,8 +66,6 @@ func playlistItemsList(service *youtube.Service, part []string, playlistId strin
 
 // Queue the playlist - Gets the playlist ID and searches for all individual videos & queue's them
 func queuePlaylist(playlistID string, m *discordgo.MessageCreate) {
-
-	ctx := context.Background()
 	service, err := youtube.NewService(ctx, option.WithAPIKey(youtubeToken))
 	if err != nil {
 		log.Fatalf("Error creating new YouTube client: %v", err)

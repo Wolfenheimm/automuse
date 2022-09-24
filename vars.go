@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
 	yt "github.com/kkdai/youtube/v2"
@@ -14,6 +16,7 @@ var (
 	v               = new(VoiceInstance)
 	opts            = dca.StdEncodeOptions
 	client          = yt.Client{Debug: true}
+	ctx             = context.Background()
 	song            = Song{}
 	songSearch      = SongSearch{}
 	searchQueue     = []SongSearch{}
