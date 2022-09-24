@@ -13,16 +13,25 @@ import (
 func queueSong(m *discordgo.MessageCreate) {
 	// Split the message to get YT link
 	commData := strings.Split(m.Content, " ")
+
 	queueLenBefore := len(queue)
-	if len(commData) == 2 {
+	if commData[0] == "play" {
 		// If playlist.... TODO: Error checking on the link
-		if strings.Contains(m.Content, "list") {
-			playlistID := strings.Replace(commData[1], "https://www.youtube.com/playlist?list=", "", -1)
+		println("here")
+		if strings.Contains(m.Content, "list") && strings.Contains(m.Content, "-pl") {
+			playlistID := strings.SplitN(commData[2], "list=", 2)[1]
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
 			queuePlaylist(playlistID, m)
-		} else {
+		} else if strings.Contains(m.Content, "watch") && !strings.Contains(m.Content, "-pl") {
+
+			link := commData[1]
+
+			if strings.Contains(m.Content, "list") {
+				link = strings.SplitN(commData[1], "list=", 2)[0]
+			}
+
 			// Single video link (not a playlist)
-			video, err := client.GetVideo(commData[1])
+			video, err := client.GetVideo(link)
 			if err != nil {
 				log.Println(err)
 			} else {
