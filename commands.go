@@ -51,9 +51,11 @@ func queueSong(m *discordgo.MessageCreate) {
 			// Join the channel of the person who made the request
 			if authorChan != m.ChannelID {
 				var err error
-				v.voice, err = s.ChannelVoiceJoin(v.guildID, authorChan, false, false)
-
+				v.voice, err = s.ChannelVoiceJoin(v.guildID, authorChan, true, true)
 				if err != nil {
+					if _, ok := s.VoiceConnections[v.guildID]; ok {
+						v.voice = s.VoiceConnections[v.guildID]
+					}
 					log.Println("ERROR: Error to join in a voice channel: ", err)
 					return
 				}
