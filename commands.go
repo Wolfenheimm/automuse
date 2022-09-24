@@ -11,42 +11,45 @@ import (
 
 // Get & queue audio in a YouTube video / playlist
 func queueSong(m *discordgo.MessageCreate) {
-	// Split the message to get YT link
-	parsedContent := m.Content
-	if strings.Contains(m.Content, "&index=") {
-		parsedContent = strings.Split(m.Content, "&index=")[0]
-	}
 
-	if strings.Contains(m.Content, "&t=") {
-		parsedContent = strings.Split(m.Content, "&t=")[0]
-	}
-
-	if strings.Contains(m.Content, "&start_radio") {
-		parsedContent = strings.Split(m.Content, "&t=")[0]
-	}
-
-	commData := strings.Split(parsedContent, " ")
+	commData, commDataIsValid := sanitizeQueueSongInputs(m)
+	//TODO: Sanitize inputs on commData
 
 	queueLenBefore := len(queue)
-	if commData[0] == "play" {
+	if commDataIsValid {
 		if strings.Contains(m.Content, "https://www.youtube") {
-			if strings.Contains(m.Content, "list") && strings.Contains(m.Content, "-pl") {
-				playlistID := strings.SplitN(commData[2], "list=", 2)[1]
-				if strings.Contains(playlistID, "PL-") {
-					s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
-					queuePlaylist(playlistID, m)
+			if strings.Contains(m.Content, "list") && strings.Contains(m.Content, "-pl") || strings.Contains(m.Content, "/playlist?") {
+				if strings.Contains(m.Content, "list=PL") {
+					if len(commData) == 2 {
+						if strings.Contains(commData[1], "list=") {
+							println(m.Content)
+							playlistID := strings.SplitN(commData[1], "list=", 2)[1]
+							s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
+							queuePlaylist(playlistID, m)
+						}
+					} else if len(commData) == 3 {
+						if strings.Contains(commData[2], "list=") {
+							println(m.Content)
+							playlistID := strings.SplitN(commData[2], "list=", 2)[1]
+							s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
+							queuePlaylist(playlistID, m)
+						}
+					} else {
+						s.ChannelMessageSend(m.ChannelID, "**[Muse]** The url must be the second or third parameter")
+					}
 				} else {
 					s.ChannelMessageSend(m.ChannelID, "**[Muse]** Lists are not accepted, only playlists are. A valid link id contains PL :unamused:")
 				}
 			} else if strings.Contains(m.Content, "watch") && !strings.Contains(m.Content, "-pl") {
-
-				link := commData[1]
-
-				if strings.Contains(m.Content, "list") {
-					link = strings.SplitN(commData[1], "list=", 2)[0]
+				if strings.Contains(commData[1], "list=") {
+					link := strings.SplitN(commData[1], "list=", 2)[0]
+					getAndQueueSingleSong(m, link)
+				} else if strings.Contains(commData[1], "watch?") && !strings.Contains(commData[1], "list=") {
+					link := commData[1]
+					getAndQueueSingleSong(m, link)
+				} else {
+					s.ChannelMessageSend(m.ChannelID, "**[Muse]** The url must be the second or third parameter")
 				}
-
-				getAndQueueSingleSong(m, link)
 			}
 			searchQueue = []SongSearch{}
 			searchRequested = false
@@ -101,7 +104,6 @@ func queueSong(m *discordgo.MessageCreate) {
 						v.voice = s.VoiceConnections[v.guildID]
 					}
 					log.Println("ERROR: Error to join in a voice channel: ", err)
-					return
 				}
 
 				v.voice.Speaking(false)
@@ -179,4 +181,78 @@ func getSearch(m *discordgo.MessageCreate, results map[string]string) {
 
 	s.ChannelMessageSend(m.ChannelID, searchList)
 	log.Println(searchList)
+}
+
+func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
+	parsedContent := m.Content
+	isValid := false
+	parsedContent = strings.Split(parsedContent, "&index=")[0]
+	parsedContent = strings.Split(parsedContent, "&t=")[0]
+	parsedContent = strings.Split(parsedContent, "&t=")[0]
+	msgData := strings.Split(parsedContent, " ")
+
+	if len(msgData) > 0 {
+		var tmp []string
+		commandPass := true
+		selectionPass := true
+		playlistPass := true
+		playWasCalled := false
+
+		// Remove any blank elements
+		for _, value := range msgData {
+			if value != " " && len(value) != 0 {
+				if !playWasCalled && value == "play" {
+					tmp = append(tmp, value)
+					playWasCalled = true
+				} else if playWasCalled && value != "play" {
+					tmp = append(tmp, value)
+				}
+			}
+		}
+		msgData = tmp
+
+		// First command MUST be play, this should always happen...
+		if msgData[0] != "play" {
+			commandPass = false
+		}
+
+		if len(msgData) == 1 {
+			commandPass = false
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Insufficiant parameters!")
+		}
+
+		// If the input was numeric, it is assumed the user is selecting from the queue or search results
+		if len(msgData) == 2 {
+			if input, err := strconv.Atoi(msgData[1]); err == nil {
+				if input <= 0 {
+					selectionPass = false
+					s.ChannelMessageSend(m.ChannelID, "**[Muse]** Your selection must be greater than 0")
+				}
+			}
+		}
+
+		// Check playlist input, it must always be the second option, and must
+		// include a playlist in the link if selected.
+		if len(msgData) >= 3 {
+			if strings.Contains(parsedContent, " -pl ") {
+				if msgData[1] == "-pl" {
+					if strings.Contains(msgData[2], "youtube") {
+						if !strings.Contains(msgData[2], "list=PL") {
+							playlistPass = false
+							s.ChannelMessageSend(m.ChannelID, "**[Muse]** You must enter a valid playlist, not a list - The ID must begin with PL.")
+						}
+					}
+				} else {
+					playlistPass = false
+					s.ChannelMessageSend(m.ChannelID, "**[Muse]** When using the -pl parameter, it must be used immediately after play")
+				}
+			}
+		}
+
+		if commandPass && selectionPass && playlistPass {
+			isValid = true
+		}
+	}
+
+	return msgData, isValid
 }

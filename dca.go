@@ -12,6 +12,7 @@ func (v *VoiceInstance) DCA(url string) {
 	encodeSession, err := dca.EncodeFile(url, opts)
 	if err != nil {
 		log.Println("FATA: Failed creating an encoding session: ", err)
+		return
 	}
 
 	v.encoder = encodeSession
@@ -20,6 +21,6 @@ func (v *VoiceInstance) DCA(url string) {
 	v.stream = stream
 	dcaErr := <-done
 	if dcaErr != nil && dcaErr != io.EOF {
-		log.Println("FATA: An error occured", err)
+		log.Println("DCA stopped suddenly: ", err)
 	}
 }

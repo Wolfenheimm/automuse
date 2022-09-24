@@ -65,7 +65,9 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// Commands
 	if m.Content != "" {
-		if strings.Contains(m.Content, "play") {
+		if m.Content == "play help" {
+			// TODO: Add Help Menu
+		} else if strings.Contains(m.Content, "play") {
 			go queueSong(m)
 		} else if m.Content == "stop" {
 			go stopAll(m)
