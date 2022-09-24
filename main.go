@@ -18,7 +18,12 @@ func init() {
 	if err != nil {
 		log.Fatalf("Invalid bot parameters: %v", err)
 	}
+
+	opts.RawOutput = true
+	opts.Bitrate = 94
+	opts.Application = "lowdelay"
 	v.stop = true // Used to check if the bot is in channel playing music.
+	searchRequested = false
 }
 
 func main() {
@@ -53,23 +58,15 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// Commands
 	if m.Content != "" {
-		if strings.Contains(m.Content, "play") && strings.Contains(m.Content, "youtube") {
+		if strings.Contains(m.Content, "play") {
 			go queueSong(m)
-		}
-
-		if m.Content == "stop" {
+		} else if m.Content == "stop" {
 			go stopAll(m)
-		}
-
-		if m.Content == "skip" {
+		} else if m.Content == "skip" {
 			go skipSong(m)
-		}
-
-		if m.Content == "queue" {
+		} else if m.Content == "queue" {
 			go getQueue(m)
-		}
-
-		if strings.Contains(m.Content, "remove") {
+		} else if strings.Contains(m.Content, "remove") {
 			go removeFromQueue(m)
 		}
 	} else {

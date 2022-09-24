@@ -2,16 +2,21 @@ package main
 
 import (
 	"github.com/bwmarrin/discordgo"
+	"github.com/jonas747/dca"
 	yt "github.com/kkdai/youtube/v2"
 )
 
 // Bot Parameters
 var (
-	botToken     string
-	youtubeToken string
-	s            *discordgo.Session
-	v            = new(VoiceInstance)
-	client       = yt.Client{Debug: true}
-	song         = Song{}
-	queue        = []Song{}
+	botToken        string
+	youtubeToken    string
+	s               *discordgo.Session
+	v               = new(VoiceInstance)
+	opts            = dca.StdEncodeOptions
+	client          = yt.Client{Debug: true}
+	song            = Song{}
+	songSearch      = SongSearch{}
+	searchQueue     = []SongSearch{}
+	queue           = []Song{}
+	searchRequested bool
 )

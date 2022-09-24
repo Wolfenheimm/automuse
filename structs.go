@@ -24,6 +24,11 @@ type Song struct {
 	VideoURL  string
 }
 
+type SongSearch struct {
+	Id   string
+	Name string
+}
+
 type VoiceInstance struct {
 	voice      *discordgo.VoiceConnection
 	session    *discordgo.Session

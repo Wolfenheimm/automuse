@@ -25,10 +25,12 @@ Automuse is a discord bot that plays music in a discord voice channel via comman
 ## Syntax
 ###### Base Commands to Use the Bot
 ````
-play https://www.youtube.com/watch?v=<VIDEO-ID>          -> Plays/Queues a video
-play https://www.youtube.com/playlist?list=<PLAYLIST-ID> -> Plays/Queues a playlist
-skip                                                     -> Skips the current Song
-stop                                                     -> Stops the current song and clears the queue
-queue                                                    -> Shows the current queue in chat
-remove #                                                 -> Remove a song from queue at number #
+play https://www.youtube.com/watch?v=<VIDEO-ID>                         -> Plays/Queues a video
+play https://www.youtube.com/playlist?list=<PLAYLIST-ID>                -> Plays/Queues a playlist
+play -pl https://www.youtube.com/watch?v=<VIDEO-ID>&list=<PLAYLIST-ID>  -> Plays/Queues a video
+play your search query string                                           -> Shows a list of videos, play # after to queue
+skip                                                                    -> Skips the current Song
+stop                                                                    -> Stops the current song and clears the queue
+queue                                                                   -> Shows the current queue in chat
+remove #                                                                -> Remove a song from queue at number #
 ````

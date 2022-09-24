@@ -23,20 +23,8 @@ func (v *VoiceInstance) DCA(url string) {
 	done := make(chan error)
 	stream := dca.NewStream(encodeSession, v.voice, done)
 	v.stream = stream
-	for err := range done {
-
-		// Something horrible happened...
-		if err != nil && err != io.EOF {
-			log.Println("FATA: An error occured", err)
-		}
-
-		// Hit EOF, cleanup & stop
-		if err == io.EOF {
-			// Clean up incase something happened and ffmpeg is still running
-			if v.encoder != nil {
-				v.encoder.Cleanup()
-			}
-			break
-		}
+	dcaErr := <-done
+	if dcaErr != nil && dcaErr != io.EOF {
+		log.Println("FATA: An error occured", err)
 	}
 }

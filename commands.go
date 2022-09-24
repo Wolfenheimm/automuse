@@ -12,41 +12,47 @@ import (
 // Get & queue audio in a YouTube video / playlist
 func queueSong(m *discordgo.MessageCreate) {
 	// Split the message to get YT link
-	commData := strings.Split(m.Content, " ")
+	parsedContent := m.Content
+	if strings.Contains(m.Content, "&index=") {
+		parsedContent = strings.Split(m.Content, "&index=")[0]
+	}
+
+	if strings.Contains(m.Content, "&t=") {
+		parsedContent = strings.Split(m.Content, "&t=")[0]
+	}
+
+	commData := strings.Split(parsedContent, " ")
 
 	queueLenBefore := len(queue)
 	if commData[0] == "play" {
-		// If playlist.... TODO: Error checking on the link
-		println("here")
-		if strings.Contains(m.Content, "list") && strings.Contains(m.Content, "-pl") {
-			playlistID := strings.SplitN(commData[2], "list=", 2)[1]
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
-			queuePlaylist(playlistID, m)
-		} else if strings.Contains(m.Content, "watch") && !strings.Contains(m.Content, "-pl") {
+		if strings.Contains(m.Content, "https://www.youtube") {
+			if strings.Contains(m.Content, "list") && strings.Contains(m.Content, "-pl") {
+				playlistID := strings.SplitN(commData[2], "list=", 2)[1]
+				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
+				queuePlaylist(playlistID, m)
+			} else if strings.Contains(m.Content, "watch") && !strings.Contains(m.Content, "-pl") {
 
-			link := commData[1]
+				link := commData[1]
 
-			if strings.Contains(m.Content, "list") {
-				link = strings.SplitN(commData[1], "list=", 2)[0]
+				if strings.Contains(m.Content, "list") {
+					link = strings.SplitN(commData[1], "list=", 2)[0]
+				}
+
+				getAndQueueSingleSong(m, link)
 			}
-
-			// Single video link (not a playlist)
-			video, err := client.GetVideo(link)
-			if err != nil {
-				log.Println(err)
-			} else {
-				// Get formats with audio channels only
-				format := video.Formats.WithAudioChannels()
-
-				// Fill Song Info
-				song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.ID, video.Title, video.Duration.String())
-
-				url, err := client.GetStreamURL(video, &format[0])
-				if err != nil {
-					log.Println(err)
+		} else {
+			if len(commData) >= 2 {
+				if input, err := strconv.Atoi(commData[1]); err == nil && searchRequested {
+					if input <= len(searchQueue) {
+						getAndQueueSingleSong(m, searchQueue[input-1].Id)
+						searchQueue = []SongSearch{}
+					}
+					searchRequested = false
 				} else {
-					song.VideoURL = url
-					queue = append(queue, song)
+					searchQueue = []SongSearch{}
+					searchQuery := strings.SplitN(m.Content, "play ", 2)[1]
+					getSearch(m, searchQueryList(searchQuery))
+					searchRequested = true
 				}
 			}
 		}
@@ -75,7 +81,7 @@ func queueSong(m *discordgo.MessageCreate) {
 
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Playing ["+queue[0].Title+"] :notes:")
 			playQueue(m)
-		} else {
+		} else if !searchRequested {
 			// Only display queue if it grew in size...
 			if queueLenBefore < len(queue) {
 				getQueue(m)
@@ -95,7 +101,7 @@ func queueSong(m *discordgo.MessageCreate) {
 func stopAll(m *discordgo.MessageCreate) {
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Stopping ["+v.nowPlaying.Title+"] & Clearing Queue :octagonal_sign:")
 	v.stop = true
-
+	searchRequested = false
 	queue = []Song{}
 
 	if v.encoder != nil {
@@ -119,7 +125,31 @@ func skipSong(m *discordgo.MessageCreate) {
 		log.Println("Skipping " + v.nowPlaying.Title)
 		log.Println("Queue Length: ", len(queue)-1)
 	}
+	searchRequested = false
 	s.ChannelMessageSend(m.ChannelID, replyMessage)
+}
+
+// Fetch a single video and place into song queue
+// Single video link (not a playlist)
+func getAndQueueSingleSong(m *discordgo.MessageCreate, link string) {
+	video, err := client.GetVideo(link)
+	if err != nil {
+		log.Println(err)
+	} else {
+		// Get formats with audio channels only
+		format := video.Formats.WithAudioChannels()
+
+		// Fill Song Info
+		song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.ID, video.Title, video.Duration.String())
+
+		url, err := client.GetStreamURL(video, &format[0])
+		if err != nil {
+			log.Println(err)
+		} else {
+			song.VideoURL = url
+			queue = append(queue, song)
+		}
+	}
 }
 
 // Fetches and displays the queue
@@ -141,6 +171,28 @@ func getQueue(m *discordgo.MessageCreate) {
 
 	s.ChannelMessageSend(m.ChannelID, queueList)
 	log.Println(queueList)
+}
+
+// Fetches and displays the queue
+func getSearch(m *discordgo.MessageCreate, results map[string]string) {
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Fetching Search Results...")
+	searchList := ":musical_note:   TOP RESULTS   :musical_note:\n"
+	index := 1
+
+	for id, name := range results {
+		searchList = searchList + " " + strconv.Itoa(index) + ". " + name + "\n"
+		index = index + 1
+		songSearch = SongSearch{id, name}
+		searchQueue = append(searchQueue, songSearch)
+	}
+
+	songSearch = SongSearch{}
+
+	s.ChannelMessageSend(m.ChannelID, searchList)
+	searchList = ""
+
+	s.ChannelMessageSend(m.ChannelID, searchList)
+	log.Println(searchList)
 }
 
 // Removes a song from the queue at a specific position
