@@ -40,6 +40,8 @@ func queueSong(m *discordgo.MessageCreate) {
 
 				getAndQueueSingleSong(m, link)
 			}
+			searchQueue = []SongSearch{}
+			searchRequested = false
 		} else {
 			if len(commData) >= 2 {
 				if input, err := strconv.Atoi(commData[1]); err == nil && searchRequested {
