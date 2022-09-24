@@ -6,7 +6,6 @@ import (
 	"log"
 
 	"github.com/bwmarrin/discordgo"
-	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
 )
 
@@ -18,10 +17,6 @@ var (
 func searchQueryList(req string) map[string]string {
 	// Make the API call to YouTube.
 	var part = []string{"id", "snippet"}
-	service, yterr := youtube.NewService(ctx, option.WithAPIKey(youtubeToken))
-	if yterr != nil {
-		log.Fatalf("Error creating new YouTube client: %v", yterr)
-	}
 
 	call := service.Search.List(part).
 		Q(req).
@@ -66,11 +61,6 @@ func playlistItemsList(service *youtube.Service, part []string, playlistId strin
 
 // Queue the playlist - Gets the playlist ID and searches for all individual videos & queue's them
 func queuePlaylist(playlistID string, m *discordgo.MessageCreate) {
-	service, err := youtube.NewService(ctx, option.WithAPIKey(youtubeToken))
-	if err != nil {
-		log.Fatalf("Error creating new YouTube client: %v", err)
-	}
-
 	nextPageToken := "" // Used to iterate through videos in a playlist
 
 	for {

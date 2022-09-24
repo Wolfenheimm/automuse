@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"google.golang.org/api/option"
+	"google.golang.org/api/youtube/v3"
 )
 
 // Initialize Discord & Setup Youtube
@@ -17,6 +19,11 @@ func init() {
 	s, err = discordgo.New("Bot " + botToken)
 	if err != nil {
 		log.Fatalf("Invalid bot parameters: %v", err)
+	}
+
+	service, err = youtube.NewService(ctx, option.WithAPIKey(youtubeToken))
+	if err != nil {
+		log.Fatalf("Error creating new YouTube client: %v", err)
 	}
 
 	opts.RawOutput = true
