@@ -189,9 +189,6 @@ func getSearch(m *discordgo.MessageCreate, results map[string]string) {
 	songSearch = SongSearch{}
 
 	s.ChannelMessageSend(m.ChannelID, searchList)
-	searchList = ""
-
-	s.ChannelMessageSend(m.ChannelID, searchList)
 	log.Println(searchList)
 }
 
