@@ -63,21 +63,20 @@ func getAndQueueSingleSong(m *discordgo.MessageCreate, link string) {
 func getQueue(m *discordgo.MessageCreate) {
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Fetching Queue...")
 	queueList := ":musical_note:   QUEUE LIST   :musical_note:\n"
-
 	if v.nowPlaying != (Song{}) {
 		queueList = queueList + "Now Playing: " + v.nowPlaying.Title + "  ->  Queued by <@" + v.nowPlaying.User + "> \n"
-	}
-
-	for index, element := range queue {
-		queueList = queueList + " " + strconv.Itoa(index+1) + ". " + element.Title + "  ->  Queued by <@" + element.User + "> \n"
-		if index+1 == 14 {
-			s.ChannelMessageSend(m.ChannelID, queueList)
-			queueList = ""
+		for index, element := range queue {
+			queueList = queueList + " " + strconv.Itoa(index+1) + ". " + element.Title + "  ->  Queued by <@" + element.User + "> \n"
+			if index+1 == 14 {
+				s.ChannelMessageSend(m.ChannelID, queueList)
+				queueList = ""
+			}
 		}
+		s.ChannelMessageSend(m.ChannelID, queueList)
+		log.Println(queueList)
+	} else {
+		s.ChannelMessageSend(m.ChannelID, queueList)
 	}
-
-	s.ChannelMessageSend(m.ChannelID, queueList)
-	log.Println(queueList)
 }
 
 // Removes a song from the queue at a specific position
