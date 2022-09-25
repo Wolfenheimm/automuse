@@ -21,6 +21,6 @@ func (v *VoiceInstance) DCA(url string) {
 	v.stream = stream
 	dcaErr := <-done
 	if dcaErr != nil && dcaErr != io.EOF {
-		log.Println("DCA stopped suddenly: ", err)
+		log.Println("DCA stopped suddenly: ", dcaErr)
 	}
 }
