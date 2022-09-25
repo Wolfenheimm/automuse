@@ -27,8 +27,9 @@ func init() {
 	}
 
 	opts.RawOutput = true
-	opts.Bitrate = 64
-	opts.Application = "audio"
+	opts.Bitrate = 96
+	opts.BufferedFrames = 50
+	opts.Application = "lowdelay"
 	v.stop = true // Used to check if the bot is in channel playing music.
 	searchRequested = false
 }
