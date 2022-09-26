@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"strconv"
 	"strings"
 
@@ -148,7 +149,11 @@ func prepSongFormat(format youtube.FormatList, videoTitle string) *youtube.Forma
 	formatList := &format[0]
 	for _, value := range badQualitySongs.BadQualitySongNodes {
 		if videoTitle == value.Title {
-			formatList = &format[value.FormatNo]
+			if value.FormatNo < len(format) {
+				formatList = &format[value.FormatNo]
+			} else {
+				log.Println("The format you set was not in range, using the first one instead.")
+			}
 			break
 		}
 	}
