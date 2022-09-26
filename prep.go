@@ -8,7 +8,6 @@ import (
 )
 
 func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
-
 	// Clean user input for later validation
 	isValid := false
 	parsedContent := m.Content
@@ -18,7 +17,6 @@ func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
 
 	if len(msgData) > 0 {
 		var tmp []string
-		commandPass := true
 		selectionPass := true
 		playlistPass := true
 		playWasCalled := false
@@ -79,7 +77,7 @@ func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
 			}
 		}
 
-		if commandPass && selectionPass && playlistPass {
+		if selectionPass && playlistPass {
 			isValid = true
 		}
 	}
@@ -114,12 +112,12 @@ func prepWatchCommand(commData []string, m *discordgo.MessageCreate) {
 }
 
 func prepFirstSongEntered(m *discordgo.MessageCreate) {
-
 	joinVoiceChannel(m)
 
 	if len(queue) > 0 {
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Playing ["+queue[0].Title+"] :notes:")
 	}
+
 	playQueue(m)
 }
 
