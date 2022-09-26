@@ -1,5 +1,5 @@
 # AutoMuse
-Automuse is a discord bot that plays music in a discord voice channel via commands. At the moment, only youtube video or playlist links can be played. The bot is still a WIP and may not work as intended.
+Automuse is a discord bot that plays music in a discord voice channel via commands. At the moment, only youtube video or playlist links can be played. It's also possible to query youtube instead of entering links and choose from a menu. The bot is still a WIP and may not work as intended
 
 :point_right: You can add this bot to your server [here](https://discord.com/api/oauth2/authorize?client_id=955836104559460362&permissions=534723950656&scope=bot%20applications.commands)
 
