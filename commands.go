@@ -82,6 +82,7 @@ func displayQueue(m *discordgo.MessageCreate) {
 		for index, element := range queue {
 			queueList = queueList + " " + strconv.Itoa(index+1) + ". " + element.Title + "  ->  Queued by <@" + element.User + "> \n"
 			if index+1 == 14 {
+				log.Println(queueList)
 				s.ChannelMessageSend(m.ChannelID, queueList)
 				queueList = ""
 			}
