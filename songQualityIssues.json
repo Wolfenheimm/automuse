@@ -1,7 +1,16 @@
 {
+    "info": "Feel free to add songs in here if they are not playing properly / stuttering",
     "songs": [
         {
-            "title": "YOUR SONG NAME HERE",
+            "title": "Future - Mask Off (Aesthetic Remix)",
+            "formatNo": 1
+        },
+        {
+            "title": "Trespass in to the Domain of the Gods (slowed) Miss the Rage (AWM)",
+            "formatNo": 1
+        },
+        {
+            "title": "Undertale Remixed ▸ Spider Dance ▸ Holder Remix",
             "formatNo": 1
         }
     ]

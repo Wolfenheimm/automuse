@@ -1,5 +1,7 @@
 # AutoMuse
-Automuse is a discord bot that plays music in a discord voice channel via commands. At the moment, only youtube video or playlist links can be played. It's also possible to query youtube instead of entering links and choose from a menu. The bot is still a WIP and may not work as intended
+Automuse is a discord bot that plays music in a discord voice channel via commands. At the moment, only youtube video or playlist links can be played. It's also possible to query youtube instead of entering links and choose from a menu. Feel free to add songs to the songQualityIssues.json file, I take requests and add them in!
+
+The bot is still a WIP and may not work as intended
 
 :point_right: You can add this bot to your server [here](https://discord.com/api/oauth2/authorize?client_id=955836104559460362&permissions=534723950656&scope=bot%20applications.commands)
 
@@ -16,6 +18,7 @@ Automuse is a discord bot that plays music in a discord voice channel via comman
 
 # How to use
 - You may only use YouTube links
+- If you are experiencing sound quality issues, add them to the songQualityIssues.json file and choose a format
 - Typing the play command in any text channel will trigger the bot to join your voice channel, you must be in a voice channel for this to work.
 - Adding the -pl argument will play the playlist or the playlist the video is associated to
 - Playing additional links will place the songs in a queue. 
@@ -28,12 +31,14 @@ Automuse is a discord bot that plays music in a discord voice channel via comman
 ## Syntax
 ###### Base Commands to Use the Bot
 ````
-play https://www.youtube.com/watch?v=<VIDEO-ID>                         -> Plays/Queues a video (audio)
+play https://www.youtube.com/watch?v=<VIDEO-ID>                         -> Plays/Queues a video(audio)
 play https://www.youtube.com/playlist?list=<PLAYLIST-ID>                -> Plays/Queues a playlist
 play -pl https://www.youtube.com/watch?v=<VIDEO-ID>&list=<PLAYLIST-ID>  -> Plays/Queues a playlist
-play #                                                                  -> Plays a video (audio) from the queue, skips song playing
+play #                                                                  -> Plays a video(audio) from the queue & skips song playing
+                                                                        -> Plays a video(audio) from the search & adds to queue
 play your search query string                                           -> Shows a list of videos, play # after to queue
 skip                                                                    -> Skips the current Song
+skip to #                                                               -> Skips to a specific song in the playlist
 stop                                                                    -> Stops the current song and clears the queue
 queue                                                                   -> Shows the current queue in chat
 remove #                                                                -> Remove a song from queue at number #
