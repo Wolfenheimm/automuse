@@ -14,7 +14,6 @@ func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
 	parsedContent := m.Content
 	parsedContent = strings.Split(parsedContent, "&index=")[0]
 	parsedContent = strings.Split(parsedContent, "&t=")[0]
-	parsedContent = strings.Split(parsedContent, "&t=")[0]
 	msgData := strings.Split(parsedContent, " ")
 
 	if len(msgData) > 0 {

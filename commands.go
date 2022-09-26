@@ -49,7 +49,9 @@ func stop(m *discordgo.MessageCreate) {
 		v.encoder.Cleanup()
 	}
 
-	v.voice.Disconnect()
+	if v.voice != nil {
+		v.voice.Disconnect()
+	}
 }
 
 // Skips the current song
