@@ -14,7 +14,7 @@ import (
 // Initialize Discord & Setup Youtube
 func init() {
 	var err error
-	botToken = os.Getenv("BOT_TOKEN_2")  // Set your discord bot token as an environment variable.
+	botToken = os.Getenv("BOT_TOKEN")    // Set your discord bot token as an environment variable.
 	youtubeToken = os.Getenv("YT_TOKEN") // Set your YouTube token as an environment variable.
 	s, err = discordgo.New("Bot " + botToken)
 	if err != nil {
