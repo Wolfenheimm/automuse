@@ -61,48 +61,6 @@ func playlistItemsList(service *youtube.Service, part []string, playlistId strin
 	}
 }
 
-// Queue the playlist - Gets the playlist ID and searches for all individual videos & queue's them
-func queuePlaylist(playlistID string, m *discordgo.MessageCreate) {
-	nextPageToken := "" // Used to iterate through videos in a playlist
-
-	for {
-		// Retrieve next set of items in the playlist.
-		var snippet = []string{"snippet"}
-		playlistResponse := playlistItemsList(service, snippet, playlistID, nextPageToken)
-
-		for _, playlistItem := range playlistResponse.Items {
-			videoId := playlistItem.Snippet.ResourceId.VideoId
-			content := "https://www.youtube.com/watch?v=" + videoId
-
-			// Get Video Data
-			video, err := client.GetVideo(content)
-			if err != nil {
-				log.Println(err)
-			} else {
-				format := video.Formats.WithAudioChannels() // Get matches with audio channels only
-				song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.ID, video.Title, video.Duration.String())
-				formatList := prepSongFormat(format, video.Title)
-				url, err := client.GetStreamURL(video, formatList)
-
-				if err != nil {
-					log.Println(err)
-				} else {
-					song.VideoURL = url
-					queue = append(queue, song)
-				}
-			}
-		}
-
-		// Set the token to retrieve the next page of results
-		nextPageToken = playlistResponse.NextPageToken
-
-		// Nothing left, break out
-		if nextPageToken == "" {
-			break
-		}
-	}
-}
-
 // Fetches and displays the queue
 func getSearch(m *discordgo.MessageCreate) {
 	searchQueue = []SongSearch{}
