@@ -9,9 +9,9 @@ Automuse is a discord bot that plays music in a discord voice channel via comman
 
 # Requirements
 - GoLang 1.18
-- Your very own discord bot token placed in an environment variable (See Link Above)
+- A Discord bot token placed in an environment variable (See Link Above)
      - Env var: BOT_TOKEN
-- Your very own YouTube API Key placed in an environment variable (See Link Above)
+- A YouTube API Key placed in an environment variable (See Link Above)
     - Env var: YT_TOKEN
 
 # How to use
