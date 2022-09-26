@@ -23,7 +23,7 @@ func queueSong(m *discordgo.MessageCreate) {
 			} else if strings.Contains(m.Content, "watch") && !strings.Contains(m.Content, "-pl") {
 				prepWatchCommand(commData, m)
 			}
-			resetSearch()
+			resetSearch() // In case a search was called prior to this
 		} else {
 			// Search or queue input was sent
 			prepSearchQueueSelector(commData, m)

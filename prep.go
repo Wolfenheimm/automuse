@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/kkdai/youtube/v2"
 )
 
 func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
@@ -140,4 +141,17 @@ func prepPlaylist(message string, m *discordgo.MessageCreate) {
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
 		queuePlaylist(playlistID, m)
 	}
+}
+
+func prepSongFormat(format youtube.FormatList, videoTitle string) *youtube.Format {
+	// Select the correct video format - Check if it's in the song quality list file first
+	formatList := &format[0]
+	for _, value := range badQualitySongs.BadQualitySongNodes {
+		if videoTitle == value.Title {
+			formatList = &format[value.FormatNo]
+			break
+		}
+	}
+
+	return formatList
 }
