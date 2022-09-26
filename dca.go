@@ -28,6 +28,6 @@ func (v *VoiceInstance) DCA(url string) {
 func setUpDcaOptions() {
 	opts.RawOutput = true
 	opts.Bitrate = 96
-	opts.BufferedFrames = 50
+	opts.BufferedFrames = 1000
 	opts.Application = "lowdelay"
 }
