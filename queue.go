@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"strconv"
-	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -30,15 +28,19 @@ func playQueue(m *discordgo.MessageCreate) {
 	}
 
 	// No more songs in the queue, reset the queue + leave channel
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing left to play, peace! :v:")
 	v.stop = true
 	v.nowPlaying = Song{}
-	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing left to play, peace! :v:")
+	queue = []Song{}
+	if v.encoder != nil {
+		v.encoder.Cleanup()
+	}
 	v.voice.Disconnect()
 }
 
 // Fetch a single video and place into song queue
 // Single video link (not a playlist)
-func getAndQueueSingleSong(m *discordgo.MessageCreate, link string) {
+func queueSingleSong(m *discordgo.MessageCreate, link string) {
 	video, err := client.GetVideo(link)
 	if err != nil {
 		log.Println(err)
@@ -59,49 +61,49 @@ func getAndQueueSingleSong(m *discordgo.MessageCreate, link string) {
 	}
 }
 
-// Fetches and displays the queue
-func getQueue(m *discordgo.MessageCreate) {
-	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Fetching Queue...")
-	queueList := ":musical_note:   QUEUE LIST   :musical_note:\n"
-	if v.nowPlaying != (Song{}) {
-		queueList = queueList + "Now Playing: " + v.nowPlaying.Title + "  ->  Queued by <@" + v.nowPlaying.User + "> \n"
-		for index, element := range queue {
-			queueList = queueList + " " + strconv.Itoa(index+1) + ". " + element.Title + "  ->  Queued by <@" + element.User + "> \n"
-			if index+1 == 14 {
-				s.ChannelMessageSend(m.ChannelID, queueList)
-				queueList = ""
+func playFromSearch(input int, m *discordgo.MessageCreate) {
+	if input <= len(searchQueue) {
+		queueSingleSong(m, searchQueue[input-1].Id)
+		searchQueue = []SongSearch{}
+	}
+	searchRequested = false
+}
+
+func playFromQueue(input int, m *discordgo.MessageCreate) {
+	if input <= len(queue) && input > 0 {
+		var tmp []Song
+		for i, value := range queue {
+			switch i {
+			case 0:
+				tmp = append(tmp, queue[input-1])
+				tmp = append(tmp, value)
+			case input - 1:
+			default:
+				tmp = append(tmp, value)
 			}
 		}
-		s.ChannelMessageSend(m.ChannelID, queueList)
-		log.Println(queueList)
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Moved "+queue[input-1].Title+" to the top of the queue")
+		queue = tmp
+		skip(m)
 	} else {
-		s.ChannelMessageSend(m.ChannelID, queueList)
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Selected input was not in queue range")
 	}
 }
 
-// Removes a song from the queue at a specific position
-func removeFromQueue(m *discordgo.MessageCreate) {
-	// Split the message to get which song to remove from the queue
-	commData := strings.Split(m.Content, " ")
-	var msgToUser string
-	if len(commData) == 2 {
-		if queuePos, err := strconv.Atoi(commData[1]); err == nil {
-			if queue != nil {
-				if 1 <= queuePos && queuePos <= len(queue) {
-					queuePos--
-					var songTitle = queue[queuePos].Title
-					var tmpQueue []Song
-					tmpQueue = queue[:queuePos]
-					tmpQueue = append(tmpQueue, queue[queuePos+1:]...)
-					queue = tmpQueue
-					msgToUser = fmt.Sprintf("**[Muse]** Removed %s.", songTitle)
-				} else {
-					msgToUser = "**[Muse]** The selection was out of range."
-				}
-			} else {
-				msgToUser = "**[Muse]** There is no queue to remove songs from."
-			}
+func prepDisplayQueue(commData []string, queueLenBefore int, m *discordgo.MessageCreate) {
+	// Only display queue if it grew in size...
+	if queueLenBefore < len(queue) {
+		displayQueue(m)
+	} else {
+		if _, err := strconv.Atoi(commData[1]); err == nil {
+			return
 		}
-		s.ChannelMessageSend(m.ChannelID, msgToUser)
+
+		nothingAddedMessage := "**[Muse]** Nothing was added, playlist or song was empty...\n"
+		nothingAddedMessage = nothingAddedMessage + "Note:\n"
+		nothingAddedMessage = nothingAddedMessage + "- Playlists should have the following url structure: <https://www.youtube.com/playlist?list=><PLAYLIST IDENTIFIER>\n"
+		nothingAddedMessage = nothingAddedMessage + "- Videos should have the following url structure: <https://www.youtube.com/watch?v=><VIDEO IDENTIFIER>\n"
+		nothingAddedMessage = nothingAddedMessage + "- Youtu.be links or links set at a certain time (t=#s) have not been implemented - sorry!"
+		s.ChannelMessageSend(m.ChannelID, nothingAddedMessage)
 	}
 }

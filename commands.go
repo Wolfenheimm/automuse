@@ -11,127 +11,39 @@ import (
 
 // Get & queue audio in a YouTube video / playlist
 func queueSong(m *discordgo.MessageCreate) {
-
 	commData, commDataIsValid := sanitizeQueueSongInputs(m)
-	//TODO: Sanitize inputs on commData
-
 	queueLenBefore := len(queue)
+
 	if commDataIsValid {
 		// Check if a youtube link is present
 		if strings.Contains(m.Content, "https://www.youtube") {
 			// Check if the link is a playlist or a simple video
 			if strings.Contains(m.Content, "list") && strings.Contains(m.Content, "-pl") || strings.Contains(m.Content, "/playlist?") {
-				// Only use lists starting with PL (Playlist only, lists are local to your own feed and cannot be used)
-				if strings.Contains(m.Content, "list=PL") {
-					// The url must be the second or third parameter
-					if len(commData) == 2 {
-						prepPlaylist(commData[1], m)
-					} else if len(commData) == 3 {
-						prepPlaylist(commData[2], m)
-					} else {
-						s.ChannelMessageSend(m.ChannelID, "**[Muse]** The url must be the second or third parameter")
-					}
-				} else {
-					s.ChannelMessageSend(m.ChannelID, "**[Muse]** Lists are not accepted, only playlists are. A valid link id contains PL :unamused:")
-				}
+				prepPlaylistCommand(commData, m)
 			} else if strings.Contains(m.Content, "watch") && !strings.Contains(m.Content, "-pl") {
-				if strings.Contains(commData[1], "list=") {
-					link := strings.SplitN(commData[1], "list=", 2)[0]
-					getAndQueueSingleSong(m, link)
-				} else if strings.Contains(commData[1], "watch?") && !strings.Contains(commData[1], "list=") {
-					link := commData[1]
-					getAndQueueSingleSong(m, link)
-				} else {
-					s.ChannelMessageSend(m.ChannelID, "**[Muse]** The url must be the second or third parameter")
-				}
+				prepWatchCommand(commData, m)
 			}
-			searchQueue = []SongSearch{}
-			searchRequested = false
+			resetSearch()
 		} else {
-			if len(commData) >= 2 {
-				if input, err := strconv.Atoi(commData[1]); err == nil && searchRequested {
-					if input <= len(searchQueue) {
-						getAndQueueSingleSong(m, searchQueue[input-1].Id)
-						searchQueue = []SongSearch{}
-					}
-					searchRequested = false
-				} else if input, err := strconv.Atoi(commData[1]); err == nil && !searchRequested {
-					if input <= len(queue) && input > 0 {
-						var tmp []Song
-						for i, value := range queue {
-							switch i {
-							case 0:
-								tmp = append(tmp, queue[input-1])
-								tmp = append(tmp, value)
-							case input - 1:
-							default:
-								tmp = append(tmp, value)
-							}
-						}
-						s.ChannelMessageSend(m.ChannelID, "**[Muse]** Moved "+queue[input-1].Title+" to the top of the queue")
-						queue = tmp
-						skipSong(m)
-					} else {
-						s.ChannelMessageSend(m.ChannelID, "**[Muse]** Selected input was not in queue range")
-					}
-				} else {
-					searchQueue = []SongSearch{}
-					searchQuery := strings.SplitN(m.Content, "play ", 2)[1]
-					getSearch(m, searchQueryList(searchQuery))
-					searchRequested = true
-				}
-			}
+			// Search or queue input was sent
+			prepSearchQueueSelector(commData, m)
 		}
 
 		// If there's nothing playing and the queue grew
 		if v.nowPlaying == (Song{}) && len(queue) >= 1 {
-
-			// Get the channel of the person who made the request
-			authorChan := SearchVoiceChannel(m.Author.ID)
-
-			// Join the channel of the person who made the request
-			if authorChan != m.ChannelID {
-				var err error
-				v.voice, err = s.ChannelVoiceJoin(v.guildID, authorChan, true, true)
-				if err != nil {
-					if _, ok := s.VoiceConnections[v.guildID]; ok {
-						v.voice = s.VoiceConnections[v.guildID]
-					}
-					log.Println("ERROR: Error to join in a voice channel: ", err)
-				}
-
-				v.voice.Speaking(false)
-				s.ChannelMessageSend(m.ChannelID, "**[Muse]** <@"+m.Author.ID+"> - I've joined your channel!")
-			}
-
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Playing ["+queue[0].Title+"] :notes:")
-			playQueue(m)
+			prepFirstSongEntered(m)
 		} else if !searchRequested {
-			// Only display queue if it grew in size...
-			if queueLenBefore < len(queue) {
-				getQueue(m)
-			} else {
-				if _, err := strconv.Atoi(commData[1]); err == nil {
-					return
-				}
-
-				nothingAddedMessage := "**[Muse]** Nothing was added, playlist or song was empty...\n"
-				nothingAddedMessage = nothingAddedMessage + "Note:\n"
-				nothingAddedMessage = nothingAddedMessage + "- Playlists should have the following url structure: <https://www.youtube.com/playlist?list=><PLAYLIST IDENTIFIER>\n"
-				nothingAddedMessage = nothingAddedMessage + "- Videos should have the following url structure: <https://www.youtube.com/watch?v=><VIDEO IDENTIFIER>\n"
-				nothingAddedMessage = nothingAddedMessage + "- Youtu.be links or links set at a certain time (t=#s) have not been implemented - sorry!"
-				s.ChannelMessageSend(m.ChannelID, nothingAddedMessage)
-			}
+			prepDisplayQueue(commData, queueLenBefore, m)
 		}
 	}
 }
 
 // Stops current song and empties the queue
-func stopAll(m *discordgo.MessageCreate) {
+func stop(m *discordgo.MessageCreate) {
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Stopping ["+v.nowPlaying.Title+"] & Clearing Queue :octagonal_sign:")
 	v.stop = true
-	searchRequested = false
 	queue = []Song{}
+	resetSearch()
 
 	if v.encoder != nil {
 		v.encoder.Cleanup()
@@ -141,7 +53,7 @@ func stopAll(m *discordgo.MessageCreate) {
 }
 
 // Skips the current song
-func skipSong(m *discordgo.MessageCreate) {
+func skip(m *discordgo.MessageCreate) {
 	// Check if a song is playing - If no song, skip this and notify
 	var replyMessage string
 	if v.nowPlaying == (Song{}) {
@@ -154,113 +66,54 @@ func skipSong(m *discordgo.MessageCreate) {
 		log.Println("Skipping " + v.nowPlaying.Title)
 		log.Println("Queue Length: ", len(queue)-1)
 	}
-	searchRequested = false
+
+	resetSearch()
 	s.ChannelMessageSend(m.ChannelID, replyMessage)
 }
 
 // Fetches and displays the queue
-func getSearch(m *discordgo.MessageCreate, results map[string]string) {
-	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Fetching Search Results...")
-	searchList := ":musical_note:   TOP RESULTS   :musical_note:\n"
-	index := 1
-
-	for id, name := range results {
-		searchList = searchList + " " + strconv.Itoa(index) + ". " + name + "\n"
-		index = index + 1
-		songSearch = SongSearch{id, name}
-		searchQueue = append(searchQueue, songSearch)
+func displayQueue(m *discordgo.MessageCreate) {
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Fetching Queue...")
+	queueList := ":musical_note:   QUEUE LIST   :musical_note:\n"
+	if v.nowPlaying != (Song{}) {
+		queueList = queueList + "Now Playing: " + v.nowPlaying.Title + "  ->  Queued by <@" + v.nowPlaying.User + "> \n"
+		for index, element := range queue {
+			queueList = queueList + " " + strconv.Itoa(index+1) + ". " + element.Title + "  ->  Queued by <@" + element.User + "> \n"
+			if index+1 == 14 {
+				s.ChannelMessageSend(m.ChannelID, queueList)
+				queueList = ""
+			}
+		}
+		s.ChannelMessageSend(m.ChannelID, queueList)
+		log.Println(queueList)
+	} else {
+		s.ChannelMessageSend(m.ChannelID, queueList)
 	}
-
-	songSearch = SongSearch{}
-
-	s.ChannelMessageSend(m.ChannelID, searchList)
-	log.Println(searchList)
 }
 
-func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
-	parsedContent := m.Content
-	isValid := false
-	parsedContent = strings.Split(parsedContent, "&index=")[0]
-	parsedContent = strings.Split(parsedContent, "&t=")[0]
-	parsedContent = strings.Split(parsedContent, "&t=")[0]
-	msgData := strings.Split(parsedContent, " ")
-
-	if len(msgData) > 0 {
-		var tmp []string
-		commandPass := true
-		selectionPass := true
-		playlistPass := true
-		playWasCalled := false
-
-		// Remove any blank elements
-		for _, value := range msgData {
-			if value != " " && len(value) != 0 {
-				if !playWasCalled && value == "play" {
-					tmp = append(tmp, value)
-					playWasCalled = true
-				} else if playWasCalled && value != "play" {
-					tmp = append(tmp, value)
-				}
-			}
-		}
-		msgData = tmp
-
-		// The message data was empty - normally due to a user typing a word containing play
-		if msgData == nil {
-			return msgData, false
-		}
-
-		// First command MUST be play, this should always happen...
-		if msgData[0] != "play" {
-			return msgData, false
-		}
-
-		if len(msgData) == 1 {
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Insufficiant parameters!")
-			return msgData, false
-		}
-
-		// If the input was numeric, it is assumed the user is selecting from the queue or search results
-		if len(msgData) == 2 {
-			if input, err := strconv.Atoi(msgData[1]); err == nil {
-				if input <= 0 {
-					selectionPass = false
-					s.ChannelMessageSend(m.ChannelID, "**[Muse]** Your selection must be greater than 0")
-				}
-			}
-		}
-
-		// Check playlist input, it must always be the second option, and must
-		// include a playlist in the link if selected.
-		if len(msgData) >= 3 {
-			if strings.Contains(parsedContent, " -pl ") {
-				if msgData[1] == "-pl" {
-					if strings.Contains(msgData[2], "youtube") {
-						if !strings.Contains(msgData[2], "list=PL") {
-							playlistPass = false
-							s.ChannelMessageSend(m.ChannelID, "**[Muse]** You must enter a valid playlist, not a list - The ID must begin with PL.")
-						}
-					}
+// Removes a song from the queue at a specific position
+func remove(m *discordgo.MessageCreate) {
+	// Split the message to get which song to remove from the queue
+	commData := strings.Split(m.Content, " ")
+	var msgToUser string
+	if len(commData) == 2 {
+		if queuePos, err := strconv.Atoi(commData[1]); err == nil {
+			if queue != nil {
+				if 1 <= queuePos && queuePos <= len(queue) {
+					queuePos--
+					var songTitle = queue[queuePos].Title
+					var tmpQueue []Song
+					tmpQueue = queue[:queuePos]
+					tmpQueue = append(tmpQueue, queue[queuePos+1:]...)
+					queue = tmpQueue
+					msgToUser = fmt.Sprintf("**[Muse]** Removed %s.", songTitle)
 				} else {
-					playlistPass = false
-					s.ChannelMessageSend(m.ChannelID, "**[Muse]** When using the -pl parameter, it must be used immediately after play")
+					msgToUser = "**[Muse]** The selection was out of range."
 				}
+			} else {
+				msgToUser = "**[Muse]** There is no queue to remove songs from."
 			}
 		}
-
-		if commandPass && selectionPass && playlistPass {
-			isValid = true
-		}
-	}
-
-	return msgData, isValid
-}
-
-func prepPlaylist(message string, m *discordgo.MessageCreate) {
-	if strings.Contains(message, "list=") {
-		println(m.Content)
-		playlistID := strings.SplitN(message, "list=", 2)[1]
-		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queueing Your PlayList... :infinity:")
-		queuePlaylist(playlistID, m)
+		s.ChannelMessageSend(m.ChannelID, msgToUser)
 	}
 }

@@ -24,3 +24,10 @@ func (v *VoiceInstance) DCA(url string) {
 		log.Println("DCA stopped suddenly: ", dcaErr)
 	}
 }
+
+func setUpDcaOptions() {
+	opts.RawOutput = true
+	opts.Bitrate = 96
+	opts.BufferedFrames = 50
+	opts.Application = "lowdelay"
+}

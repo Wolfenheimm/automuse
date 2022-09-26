@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"google.golang.org/api/youtube/v3"
@@ -98,6 +100,33 @@ func queuePlaylist(playlistID string, m *discordgo.MessageCreate) {
 			break
 		}
 	}
+}
+
+// Fetches and displays the queue
+func getSearch(m *discordgo.MessageCreate) {
+	searchQueue = []SongSearch{}
+	searchQuery := strings.SplitN(m.Content, "play ", 2)[1]
+	results := searchQueryList(searchQuery)
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Fetching Search Results...")
+	searchList := ":musical_note:   TOP RESULTS   :musical_note:\n"
+	index := 1
+
+	for id, name := range results {
+		searchList = searchList + " " + strconv.Itoa(index) + ". " + name + "\n"
+		index = index + 1
+		songSearch = SongSearch{id, name}
+		searchQueue = append(searchQueue, songSearch)
+	}
+
+	songSearch = SongSearch{}
+	searchRequested = true
+	s.ChannelMessageSend(m.ChannelID, searchList)
+	log.Println(searchList)
+}
+
+func resetSearch() {
+	searchQueue = []SongSearch{}
+	searchRequested = false
 }
 
 // Print the ID and title of each result in a list as well as a name that

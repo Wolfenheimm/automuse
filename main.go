@@ -14,8 +14,8 @@ import (
 // Initialize Discord & Setup Youtube
 func init() {
 	var err error
-	botToken = os.Getenv("BOT_TOKEN_2") // Set your discord bot token as an environment variable.
-	youtubeToken = os.Getenv("YT_TOKEN")
+	botToken = os.Getenv("BOT_TOKEN_2")  // Set your discord bot token as an environment variable.
+	youtubeToken = os.Getenv("YT_TOKEN") // Set your YouTube token as an environment variable.
 	s, err = discordgo.New("Bot " + botToken)
 	if err != nil {
 		log.Fatalf("Invalid bot parameters: %v", err)
@@ -26,10 +26,7 @@ func init() {
 		log.Fatalf("Error creating new YouTube client: %v", err)
 	}
 
-	opts.RawOutput = true
-	opts.Bitrate = 96
-	opts.BufferedFrames = 50
-	opts.Application = "lowdelay"
+	setUpDcaOptions()
 	v.stop = true // Used to check if the bot is in channel playing music.
 	searchRequested = false
 }
@@ -71,13 +68,13 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 		} else if strings.Contains(m.Content, "play") {
 			go queueSong(m)
 		} else if m.Content == "stop" {
-			go stopAll(m)
+			go stop(m)
 		} else if m.Content == "skip" {
-			go skipSong(m)
+			go skip(m)
 		} else if m.Content == "queue" {
-			go getQueue(m)
+			go displayQueue(m)
 		} else if strings.Contains(m.Content, "remove") {
-			go removeFromQueue(m)
+			go remove(m)
 		}
 	} else {
 		return
