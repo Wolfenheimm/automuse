@@ -56,21 +56,41 @@ func stop(m *discordgo.MessageCreate) {
 
 // Skips the current song
 func skip(m *discordgo.MessageCreate) {
-	// Check if a song is playing - If no song, skip this and notify
-	var replyMessage string
-	if v.nowPlaying == (Song{}) {
-		replyMessage = "**[Muse]** Queue is empty - There's nothing to skip!"
-	} else {
-		replyMessage = fmt.Sprintf("**[Muse]** Skipping [%s] :loop:", v.nowPlaying.Title)
-		v.stop = true
-		v.speaking = false
-		v.encoder.Cleanup()
-		log.Println("Skipping " + v.nowPlaying.Title)
-		log.Println("Queue Length: ", len(queue)-1)
+	// Check if skipping current song or skipping to another song
+	if m.Content == "skip" {
+		if v.nowPlaying == (Song{}) {
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queue is empty - There's nothing to skip!")
+		} else {
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Skipping "+v.nowPlaying.Title+" :loop:")
+			prepSkip()
+			resetSearch()
+			log.Println("Skipped " + v.nowPlaying.Title)
+		}
+	} else if strings.Contains(m.Content, "skip to ") {
+		msgData := strings.Split(m.Content, " ")
+		// Can only accept 3 params: skip to #
+		if len(msgData) == 3 {
+			// The third parameter must be a number
+			if input, err := strconv.Atoi(msgData[2]); err == nil {
+				// Ensure input is greater than 0 and less than the length of the queue
+				if input <= len(queue) && input > 0 {
+					var tmp []Song
+					for i, value := range queue {
+						if i >= input-1 {
+							tmp = append(tmp, value)
+						}
+					}
+					s.ChannelMessageSend(m.ChannelID, "**[Muse]** Jumping to "+queue[input-1].Title+" :leftwards_arrow_with_hook: ")
+					log.Printf("Jumping to [%s]", queue[input-1])
+					queue = tmp
+					prepSkip()
+					resetSearch()
+				} else {
+					s.ChannelMessageSend(m.ChannelID, "**[Muse]** Selected input was not in queue range")
+				}
+			}
+		}
 	}
-
-	resetSearch()
-	s.ChannelMessageSend(m.ChannelID, replyMessage)
 }
 
 // Fetches and displays the queue

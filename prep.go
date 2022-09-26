@@ -160,3 +160,9 @@ func prepSongFormat(format youtube.FormatList, videoTitle string) *youtube.Forma
 
 	return formatList
 }
+
+func prepSkip() {
+	v.stop = true
+	v.speaking = false
+	v.encoder.Cleanup()
+}

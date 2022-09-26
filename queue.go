@@ -87,7 +87,7 @@ func playFromQueue(input int, m *discordgo.MessageCreate) {
 		}
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Moved "+queue[input-1].Title+" to the top of the queue")
 		queue = tmp
-		skip(m)
+		prepSkip()
 	} else {
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Selected input was not in queue range")
 	}
