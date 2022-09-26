@@ -28,7 +28,7 @@ func init() {
 		log.Fatalf("Error creating new YouTube client: %v", err)
 	}
 
-	setUpDcaOptions()
+	setUpDcaOptions() // Encoder Settings
 
 	// Read & store the list of bad quality songs
 	file, _ := ioutil.ReadFile("songQualityIssues.json")

@@ -73,11 +73,9 @@ func getSearch(m *discordgo.MessageCreate) {
 	for id, name := range results {
 		searchList = searchList + " " + strconv.Itoa(index) + ". " + name + "\n"
 		index = index + 1
-		songSearch = SongSearch{id, name}
-		searchQueue = append(searchQueue, songSearch)
+		searchQueue = append(searchQueue, SongSearch{id, name})
 	}
 
-	songSearch = SongSearch{}
 	searchRequested = true
 	s.ChannelMessageSend(m.ChannelID, searchList)
 	log.Println(searchList)

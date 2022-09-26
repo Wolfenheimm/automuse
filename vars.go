@@ -13,6 +13,7 @@ import (
 var (
 	botToken        string
 	youtubeToken    string
+	searchRequested bool
 	service         *youtube.Service
 	s               *discordgo.Session
 	v               = new(VoiceInstance)
@@ -20,9 +21,7 @@ var (
 	client          = yt.Client{Debug: true}
 	ctx             = context.Background()
 	song            = Song{}
-	songSearch      = SongSearch{}
 	searchQueue     = []SongSearch{}
 	queue           = []Song{}
 	badQualitySongs = BadQualitySongNodes{}
-	searchRequested bool
 )

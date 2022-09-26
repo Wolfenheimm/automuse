@@ -109,7 +109,6 @@ func queuePlaylist(playlistID string, m *discordgo.MessageCreate) {
 func playFromSearch(input int, m *discordgo.MessageCreate) {
 	if input <= len(searchQueue) && input > 0 {
 		queueSingleSong(m, searchQueue[input-1].Id)
-		searchQueue = []SongSearch{}
 	} else {
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** The value you entered was outside the range of the search...")
 	}
