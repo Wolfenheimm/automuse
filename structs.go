@@ -39,3 +39,12 @@ type VoiceInstance struct {
 	speaking   bool
 	stop       bool
 }
+
+type BadQualitySongNodes struct {
+	BadQualitySongNodes []BadQualitySong `json:"songs"`
+}
+
+type BadQualitySong struct {
+	Title    string `json:"title"`
+	FormatNo int    `json:"formatNo"`
+}

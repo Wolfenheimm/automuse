@@ -50,8 +50,19 @@ func queueSingleSong(m *discordgo.MessageCreate, link string) {
 
 		// Fill Song Info
 		song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.ID, video.Title, video.Duration.String())
+		var url string
+		var err error
 
-		url, err := client.GetStreamURL(video, &format[0])
+		// Select the correct video format - Check if it's in the song quality list file first
+		formatList := &format[0]
+		for _, value := range badQualitySongs.BadQualitySongNodes {
+			if video.Title == value.Title {
+				formatList = &format[value.FormatNo]
+				break
+			}
+		}
+		url, err = client.GetStreamURL(video, formatList)
+
 		if err != nil {
 			log.Println(err)
 		} else {

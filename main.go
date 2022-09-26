@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -14,7 +16,7 @@ import (
 // Initialize Discord & Setup Youtube
 func init() {
 	var err error
-	botToken = os.Getenv("BOT_TOKEN")    // Set your discord bot token as an environment variable.
+	botToken = os.Getenv("BOT_TOKEN_2")  // Set your discord bot token as an environment variable.
 	youtubeToken = os.Getenv("YT_TOKEN") // Set your YouTube token as an environment variable.
 	s, err = discordgo.New("Bot " + botToken)
 	if err != nil {
@@ -27,6 +29,11 @@ func init() {
 	}
 
 	setUpDcaOptions()
+
+	// Read & store the list of bad quality songs
+	file, _ := ioutil.ReadFile("songQualityIssues.json")
+	_ = json.Unmarshal([]byte(file), &badQualitySongs)
+
 	v.stop = true // Used to check if the bot is in channel playing music.
 	searchRequested = false
 }

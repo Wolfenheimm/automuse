@@ -23,5 +23,6 @@ var (
 	songSearch      = SongSearch{}
 	searchQueue     = []SongSearch{}
 	queue           = []Song{}
+	badQualitySongs = BadQualitySongNodes{}
 	searchRequested bool
 )
