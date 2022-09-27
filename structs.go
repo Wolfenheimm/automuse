@@ -42,9 +42,15 @@ type VoiceInstance struct {
 
 type BadQualitySongNodes struct {
 	BadQualitySongNodes []BadQualitySong `json:"songs"`
+	BadQualityVids      []BadQualityVids `json:"vids"`
 }
 
 type BadQualitySong struct {
 	Title    string `json:"title"`
+	FormatNo int    `json:"formatNo"`
+}
+
+type BadQualityVids struct {
+	Author   string `json:"author"`
 	FormatNo int    `json:"formatNo"`
 }

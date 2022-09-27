@@ -144,17 +144,28 @@ func prepPlaylist(message string, m *discordgo.MessageCreate) {
 	}
 }
 
-func prepSongFormat(format youtube.FormatList, videoTitle string) *youtube.Format {
+func prepSongFormat(format youtube.FormatList, video *youtube.Video) *youtube.Format {
 	// Select the correct video format - Check if it's in the song quality list file first
 	formatList := &format[0]
 	for _, value := range badQualitySongs.BadQualitySongNodes {
-		if videoTitle == value.Title {
+		if video.Title == value.Title {
 			if value.FormatNo < len(format) {
 				formatList = &format[value.FormatNo]
+				return formatList
 			} else {
-				log.Println("The format you set was not in range, using the first one instead.")
+				log.Println("The format you set for the song was not in range, using the first one instead.")
 			}
-			break
+		}
+	}
+
+	for _, value := range badQualitySongs.BadQualityVids {
+		if video.Author == value.Author {
+			if value.FormatNo < len(format) {
+				formatList = &format[value.FormatNo]
+				return formatList
+			} else {
+				log.Println("The format you set for the author was not in range, using the first one instead.")
+			}
 		}
 	}
 

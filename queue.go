@@ -52,7 +52,7 @@ func queueSingleSong(m *discordgo.MessageCreate, link string) {
 		song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.ID, video.Title, video.Duration.String())
 
 		// Select the correct video format - Check if it's in the song quality list file first
-		formatList := prepSongFormat(format, video.Title)
+		formatList := prepSongFormat(format, video)
 		url, err := client.GetStreamURL(video, formatList)
 
 		if err != nil {
@@ -84,7 +84,7 @@ func queuePlaylist(playlistID string, m *discordgo.MessageCreate) {
 			} else {
 				format := video.Formats.WithAudioChannels() // Get matches with audio channels only
 				song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.ID, video.Title, video.Duration.String())
-				formatList := prepSongFormat(format, video.Title)
+				formatList := prepSongFormat(format, video)
 				url, err := client.GetStreamURL(video, formatList)
 
 				if err != nil {
