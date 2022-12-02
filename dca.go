@@ -8,8 +8,17 @@ import (
 )
 
 // Encodes the video for audio playback
-func (v *VoiceInstance) DCA(url string) {
-	encodeSession, err := dca.EncodeFile(url, opts)
+func (v *VoiceInstance) DCA(path string, isMpeg bool) {
+	var encodeSession *dca.EncodeSession
+	var err error
+
+	if isMpeg {
+		dirPath := "mpegs/" + path
+		encodeSession, err = dca.EncodeFile(dirPath, opts)
+	} else {
+		encodeSession, err = dca.EncodeFile(path, opts)
+	}
+
 	if err != nil {
 		log.Println("FATA: Failed creating an encoding session: ", err)
 		return

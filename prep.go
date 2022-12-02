@@ -113,14 +113,16 @@ func prepWatchCommand(commData []string, m *discordgo.MessageCreate) {
 	}
 }
 
-func prepFirstSongEntered(m *discordgo.MessageCreate) {
-	joinVoiceChannel(m)
-
+func prepFirstSongEntered(m *discordgo.MessageCreate, isManual bool) {
 	if len(queue) > 0 {
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Playing ["+queue[0].Title+"] :notes:")
 	}
 
-	playQueue(m)
+	if isManual {
+		playQueue(m, true)
+	} else {
+		playQueue(m, false)
+	}
 }
 
 func prepSearchQueueSelector(commData []string, m *discordgo.MessageCreate) {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -31,7 +30,7 @@ func init() {
 	setUpDcaOptions() // Encoder Settings
 
 	// Read & store the list of bad quality songs
-	file, _ := ioutil.ReadFile("songQualityIssues.json")
+	file, _ := os.ReadFile("songQualityIssues.json")
 	_ = json.Unmarshal([]byte(file), &badQualitySongs)
 
 	v.stop = true // Used to check if the bot is in channel playing music.
@@ -72,6 +71,8 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Content != "" {
 		if m.Content == "play help" {
 			// TODO: Add Help Menu
+		} else if m.Content == "play stuff" {
+			go queueStuff(m)
 		} else if strings.Contains(m.Content, "play") {
 			go queueSong(m)
 		} else if m.Content == "stop" {

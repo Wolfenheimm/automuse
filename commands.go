@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 
@@ -31,10 +32,28 @@ func queueSong(m *discordgo.MessageCreate) {
 
 		// If there's nothing playing and the queue grew
 		if v.nowPlaying == (Song{}) && len(queue) >= 1 {
-			prepFirstSongEntered(m)
+			joinVoiceChannel(m)
+			prepFirstSongEntered(m, false)
 		} else if !searchRequested {
 			prepDisplayQueue(commData, queueLenBefore, m)
 		}
+	}
+}
+
+func queueStuff(m *discordgo.MessageCreate) {
+	files, err := os.ReadDir("mpegs/")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, file := range files {
+		song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, "manual entry", file.Name(), "none")
+		queue = append(queue, song)
+	}
+
+	if v.nowPlaying == (Song{}) && len(queue) >= 1 {
+		joinVoiceChannel(m)
+		prepFirstSongEntered(m, true)
 	}
 }
 

@@ -8,7 +8,7 @@ import (
 )
 
 // Plays the queue
-func playQueue(m *discordgo.MessageCreate) {
+func playQueue(m *discordgo.MessageCreate, isManual bool) {
 	for len(queue) > 0 {
 		if len(queue) != 0 {
 			v.nowPlaying, queue = queue[0], queue[1:]
@@ -19,7 +19,12 @@ func playQueue(m *discordgo.MessageCreate) {
 
 		v.stop = false
 		v.voice.Speaking(true)
-		v.DCA(v.nowPlaying.VideoURL)
+
+		if isManual {
+			v.DCA(v.nowPlaying.Title, isManual)
+		} else {
+			v.DCA(v.nowPlaying.VideoURL, isManual)
+		}
 
 		// Queue not empty, next song isn't empty (incase nil song in queue)
 		if len(queue) != 0 && queue[0].Title != "" {
@@ -32,10 +37,14 @@ func playQueue(m *discordgo.MessageCreate) {
 	v.stop = true
 	v.nowPlaying = Song{}
 	queue = []Song{}
+
 	if v.encoder != nil {
 		v.encoder.Cleanup()
 	}
-	v.voice.Disconnect()
+
+	if queue == nil {
+		v.voice.Disconnect()
+	}
 }
 
 // Fetch a single video and place into song queue
