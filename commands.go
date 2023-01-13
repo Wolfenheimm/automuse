@@ -37,7 +37,14 @@ func queueSong(m *discordgo.MessageCreate) {
 		} else if !searchRequested {
 			prepDisplayQueue(commData, queueLenBefore, m)
 		}
+
+		commDataIsValid = false
 	}
+}
+
+func queueKudasai(m *discordgo.MessageCreate) {
+	commData := []string{"queue", "https://www.youtube.com/watch?v=35AgDDPQE48"}
+	prepWatchCommand(commData, m)
 }
 
 func queueStuff(m *discordgo.MessageCreate) {

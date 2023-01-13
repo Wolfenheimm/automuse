@@ -14,6 +14,7 @@ func joinVoiceChannel(m *discordgo.MessageCreate) {
 	if authorChan != m.ChannelID {
 		var err error
 		v.voice, err = s.ChannelVoiceJoin(v.guildID, authorChan, true, true)
+
 		if err != nil {
 			if _, ok := s.VoiceConnections[v.guildID]; ok {
 				v.voice = s.VoiceConnections[v.guildID]

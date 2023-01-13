@@ -14,7 +14,7 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 			v.nowPlaying, queue = queue[0], queue[1:]
 		} else {
 			v.nowPlaying = Song{}
-			return
+			break
 		}
 
 		v.stop = false
@@ -37,13 +37,10 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 	v.stop = true
 	v.nowPlaying = Song{}
 	queue = []Song{}
+	v.voice.Disconnect()
 
 	if v.encoder != nil {
 		v.encoder.Cleanup()
-	}
-
-	if queue == nil {
-		v.voice.Disconnect()
 	}
 }
 

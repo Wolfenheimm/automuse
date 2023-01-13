@@ -43,12 +43,14 @@ func main() {
 		log.Println("Firing up...")
 	})
 	s.AddHandler(executionHandler)
+	//s.Identify.Intents = discordgo.IntentsGuildMessages
 
 	err := s.Open()
 	if err != nil {
 		log.Fatalf("Cannot open the session: %v", err)
 	}
 	defer s.Close()
+	log.Println("Session Open...")
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
@@ -66,6 +68,9 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	guildID := SearchGuild(m.ChannelID)
 	v.guildID = guildID
 	v.session = s
+	log.Println("Guild ID:", guildID)
+	log.Println("Channel ID:", m.ChannelID)
+	log.Println("Message:", m.Content)
 
 	// Commands
 	if m.Content != "" {
@@ -73,6 +78,8 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 			// TODO: Add Help Menu
 		} else if m.Content == "play stuff" {
 			go queueStuff(m)
+		} else if m.Content == "play kudasai" {
+			go queueKudasai(m)
 		} else if strings.Contains(m.Content, "play") {
 			go queueSong(m)
 		} else if m.Content == "stop" {
@@ -85,6 +92,7 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 			go remove(m)
 		}
 	} else {
+		log.Println("Message is empty:", m.Content)
 		return
 	}
 }
