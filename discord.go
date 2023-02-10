@@ -2,29 +2,29 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 func joinVoiceChannel(m *discordgo.MessageCreate) {
 	// Get the channel of the person who made the request
-	authorChan := SearchVoiceChannel(m.Author.ID)
+	generalChan := os.Getenv("GENERAL_CHAT_ID") // original value for guild id = v.guildID
+	guildID := os.Getenv("GUILD_ID")
 
-	// Join the channel of the person who made the request
-	if authorChan != m.ChannelID {
-		var err error
-		v.voice, err = s.ChannelVoiceJoin(v.guildID, authorChan, true, true)
+	var err error
+	v.voice, err = s.ChannelVoiceJoin(guildID, generalChan, true, true)
 
-		if err != nil {
-			if _, ok := s.VoiceConnections[v.guildID]; ok {
-				v.voice = s.VoiceConnections[v.guildID]
-			}
-			log.Println("ERROR: Error to join in a voice channel: ", err)
+	if err != nil {
+		if _, ok := s.VoiceConnections[guildID]; ok {
+			v.voice = s.VoiceConnections[guildID]
 		}
-
-		v.voice.Speaking(false)
-		s.ChannelMessageSend(m.ChannelID, "**[Muse]** <@"+m.Author.ID+"> - I've joined your channel!")
+		log.Println("ERROR: Guild ID: ", guildID)
+		log.Println("ERROR: Channel: ", generalChan)
+		log.Println("ERROR: Error to join in a voice channel: ", err)
 	}
+
+	v.voice.Speaking(false)
 }
 
 // Gets guild information

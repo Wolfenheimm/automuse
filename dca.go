@@ -15,8 +15,10 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool) {
 	if isMpeg {
 		dirPath := "mpegs/" + path
 		encodeSession, err = dca.EncodeFile(dirPath, opts)
+		defer encodeSession.Cleanup()
 	} else {
 		encodeSession, err = dca.EncodeFile(path, opts)
+		defer encodeSession.Cleanup()
 	}
 
 	if err != nil {
@@ -31,6 +33,7 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool) {
 	dcaErr := <-done
 	if dcaErr != nil && dcaErr != io.EOF {
 		log.Println("DCA stopped suddenly: ", dcaErr)
+		v.stream = nil
 	}
 }
 

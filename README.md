@@ -10,11 +10,14 @@ The bot is still a WIP and may not work as intended
 :point_right: Follow the official YouTube documentation to get/set your YouTube API key [here](https://developers.google.com/youtube/v3/docs)
 
 # Requirements
-- GoLang 1.18
+- GoLang 1.19
 - A Discord bot token placed in an environment variable (See Link Above)
      - Env var: BOT_TOKEN
 - A YouTube API Key placed in an environment variable (See Link Above)
     - Env var: YT_TOKEN
+- Your Discord Guild ID and Channel ID placed in environment variables
+    - Env var: GUILD_ID
+    - Env var: GENERAL_CHAT_ID <-- You may choose any voice channel in your server
 
 # How to use
 - You may only use YouTube links
