@@ -18,10 +18,17 @@ func joinVoiceChannel(m *discordgo.MessageCreate) {
 	if err != nil {
 		if _, ok := s.VoiceConnections[guildID]; ok {
 			v.voice = s.VoiceConnections[guildID]
+			log.Println("ERROR: Guild ID: ", guildID)
+			log.Println("ERROR: Channel: ", generalChan)
+			log.Println("ERROR: Error to join in a voice channel: ", err)
+			if err != nil {
+				log.Println("error connecting:", err)
+				return
+			}
+		} else {
+			log.Println("error connecting:", err)
+			return
 		}
-		log.Println("ERROR: Guild ID: ", guildID)
-		log.Println("ERROR: Channel: ", generalChan)
-		log.Println("ERROR: Error to join in a voice channel: ", err)
 	}
 
 	v.voice.Speaking(false)
