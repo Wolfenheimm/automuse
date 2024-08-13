@@ -1,13 +1,20 @@
 # AutoMuse
 Automuse is a discord bot that plays music in a discord voice channel via commands. At the moment, only youtube video or playlist links can be played. It's also possible to query youtube instead of entering links and choose from a menu. Feel free to add songs to the songQualityIssues.json file, I take requests and add them in!
 
-The bot is still a WIP and may not work as intended
-
-:point_right: You can add this bot to your server [here](https://discord.com/api/oauth2/authorize?client_id=955836104559460362&permissions=534723950656&scope=bot%20applications.commands)
+The bot is still a WIP and may not work as intended.
 
 :point_right: Get/set your bot token [here](https://discord.com/developers/applications/)
 
 :point_right: Follow the official YouTube documentation to get/set your YouTube API key [here](https://developers.google.com/youtube/v3/docs)
+
+:point_right: Set up your bot on the discord developer portal [here](https://discord.com/developers/applications), and see the permissions section below for more information on how to configure it.
+
+## Permissions
+
+Automuse requires the `bot` **scope** and several permissions on a server to work properly. Therefore, ensure to set these in the developer portal during the creation of the invite link:
+- `Send Messages`
+- `Connect`
+- `Speak`
 
 # Requirements
 - GoLang 1.19

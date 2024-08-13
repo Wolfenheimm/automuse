@@ -29,21 +29,15 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool) {
 		log.Println("FATA: Failed creating an encoding session: ", err)
 		return
 	}
+
 	defer encodeSession.Cleanup()
 
 	v.encoder = encodeSession
 	done := make(chan error)
 	stream := dca.NewStream(encodeSession, v.voice, done)
 	v.stream = stream
-
-	log.Println("INFO: DCA stream started")
-
 	dcaErr := <-done
-	log.Println("INFO: DCA stream finished")
-
 	if dcaErr != nil {
-		log.Println("ERROR: DCA stream error: ", dcaErr) // Log the error message
-
 		if dcaErr == io.EOF {
 			log.Println("INFO: DCA stream ended normally with EOF")
 		} else if strings.Contains(dcaErr.Error(), `strconv.ParseFloat: parsing "N": invalid syntax`) {
@@ -52,6 +46,7 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool) {
 		} else {
 			log.Println("DCA stopped suddenly: ", dcaErr)
 		}
+		v.nowPlaying.Duration = "0"
 		v.stream = nil
 	} else {
 		log.Println("INFO: DCA stream ended without error")

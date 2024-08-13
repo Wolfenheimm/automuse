@@ -32,7 +32,7 @@ func queueSong(m *discordgo.MessageCreate) {
 
 		// If there's nothing playing and the queue grew
 		if v.nowPlaying == (Song{}) && len(queue) >= 1 {
-			joinVoiceChannel(m)
+			joinVoiceChannel()
 			prepFirstSongEntered(m, false)
 		} else if !searchRequested {
 			prepDisplayQueue(commData, queueLenBefore, m)
@@ -59,7 +59,7 @@ func queueStuff(m *discordgo.MessageCreate) {
 	}
 
 	if v.nowPlaying == (Song{}) && len(queue) >= 1 {
-		joinVoiceChannel(m)
+		joinVoiceChannel()
 		prepFirstSongEntered(m, true)
 	}
 }

@@ -3,11 +3,9 @@ package main
 import (
 	"log"
 	"os"
-
-	"github.com/bwmarrin/discordgo"
 )
 
-func joinVoiceChannel(m *discordgo.MessageCreate) {
+func joinVoiceChannel() {
 	// Get the channel of the person who made the request
 	generalChan := os.Getenv("GENERAL_CHAT_ID") // original value for guild id = v.guildID
 	guildID := os.Getenv("GUILD_ID")
