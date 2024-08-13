@@ -42,11 +42,13 @@ func queueSong(m *discordgo.MessageCreate) {
 	}
 }
 
+// Hidden play command, used for testing purposes
 func queueKudasai(m *discordgo.MessageCreate) {
 	commData := []string{"queue", "https://www.youtube.com/watch?v=35AgDDPQE48"}
 	prepWatchCommand(commData, m)
 }
 
+// Queue a list of songs
 func queueStuff(m *discordgo.MessageCreate) {
 	files, err := os.ReadDir("mpegs/")
 	if err != nil {

@@ -81,6 +81,7 @@ func getSearch(m *discordgo.MessageCreate) {
 	log.Println(searchList)
 }
 
+// Reset the search queue and search requested flag
 func resetSearch() {
 	searchQueue = []SongSearch{}
 	searchRequested = false

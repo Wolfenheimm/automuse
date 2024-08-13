@@ -42,8 +42,8 @@ func main() {
 	s.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
 		log.Println("Firing up...")
 	})
+
 	s.AddHandler(executionHandler)
-	//s.Identify.Intents = discordgo.IntentsGuildMessages
 
 	err := s.Open()
 	if err != nil {

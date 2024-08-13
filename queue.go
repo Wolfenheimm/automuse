@@ -9,6 +9,7 @@ import (
 
 // Plays the queue
 func playQueue(m *discordgo.MessageCreate, isManual bool) {
+	// Iterate through the queue, playing each song
 	for len(queue) > 0 {
 		if len(queue) != 0 {
 			v.nowPlaying, queue = queue[0], queue[1:]
@@ -20,6 +21,7 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 		v.stop = false
 		v.voice.Speaking(true)
 
+		// TODO: Consider removing mpeg support
 		if isManual {
 			v.DCA(v.nowPlaying.Title, isManual)
 		} else {
@@ -39,6 +41,7 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 	queue = []Song{}
 	v.voice.Disconnect()
 
+	// Cleanup the encoder
 	if v.encoder != nil {
 		v.encoder.Cleanup()
 	}
@@ -112,6 +115,7 @@ func queuePlaylist(playlistID string, m *discordgo.MessageCreate) {
 	}
 }
 
+// Plays the chosen song from a list provided by the search function
 func playFromSearch(input int, m *discordgo.MessageCreate) {
 	if input <= len(searchQueue) && input > 0 {
 		queueSingleSong(m, searchQueue[input-1].Id)
@@ -121,6 +125,7 @@ func playFromSearch(input int, m *discordgo.MessageCreate) {
 	searchRequested = false
 }
 
+// Plays the chosen song from the queue
 func playFromQueue(input int, m *discordgo.MessageCreate) {
 	if input <= len(queue) && input > 0 {
 		var tmp []Song
@@ -142,6 +147,7 @@ func playFromQueue(input int, m *discordgo.MessageCreate) {
 	}
 }
 
+// Prepares queue display
 func prepDisplayQueue(commData []string, queueLenBefore int, m *discordgo.MessageCreate) {
 	// Only display queue if it grew in size...
 	if queueLenBefore < len(queue) {

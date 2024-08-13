@@ -5,6 +5,7 @@ import (
 	"os"
 )
 
+// Joins the voice channel designated by the environment variables
 func joinVoiceChannel() {
 	// Get the channel of the person who made the request
 	generalChan := os.Getenv("GENERAL_CHAT_ID") // original value for guild id = v.guildID

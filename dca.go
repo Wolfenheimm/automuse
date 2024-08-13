@@ -16,6 +16,7 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool) {
 	var encodeSession *dca.EncodeSession
 	var err error
 
+	// TODO: Consider removing mpeg support
 	if isMpeg {
 		dirPath := "mpegs/" + path
 		log.Println("INFO: Encoding MPEG file at path:", dirPath)
@@ -53,6 +54,7 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool) {
 	}
 }
 
+// Sets up the DCA encoder options
 func setUpDcaOptions() {
 	opts.RawOutput = false
 	opts.Bitrate = 128

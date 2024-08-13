@@ -46,6 +46,7 @@ func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
 			return msgData, false
 		}
 
+		// If the user only entered play, it is assumed they were simply saying the word...
 		if len(msgData) == 1 {
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Insufficient parameters!")
 			return msgData, false
@@ -79,6 +80,7 @@ func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
 			}
 		}
 
+		// If both selection and playlist pass, the input is valid
 		if selectionPass && playlistPass {
 			isValid = true
 		}
@@ -87,6 +89,7 @@ func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
 	return msgData, isValid
 }
 
+// Prepares the play command if a playlist is found in the url
 func prepPlaylistCommand(commData []string, m *discordgo.MessageCreate) {
 	// Only use lists starting with PL (Playlist only, lists are local to your own feed and cannot be used)
 	if strings.Contains(m.Content, "list=PL") {
@@ -103,6 +106,7 @@ func prepPlaylistCommand(commData []string, m *discordgo.MessageCreate) {
 	}
 }
 
+// Checks if the user is queuing a song or playlist
 func prepWatchCommand(commData []string, m *discordgo.MessageCreate) {
 	if strings.Contains(commData[1], "list=") {
 		queueSingleSong(m, strings.SplitN(commData[1], "list=", 2)[0])
@@ -113,6 +117,7 @@ func prepWatchCommand(commData []string, m *discordgo.MessageCreate) {
 	}
 }
 
+// Prepares the play command when a song is manually entered - TODO: perhaps manual entry should be removed...
 func prepFirstSongEntered(m *discordgo.MessageCreate, isManual bool) {
 	if len(queue) > 0 {
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Playing ["+queue[0].Title+"] :notes:")
@@ -125,6 +130,7 @@ func prepFirstSongEntered(m *discordgo.MessageCreate, isManual bool) {
 	}
 }
 
+// Prepares the play command when a numerical option is chosen (queue or search)
 func prepSearchQueueSelector(commData []string, m *discordgo.MessageCreate) {
 	if len(commData) >= 2 {
 		if input, err := strconv.Atoi(commData[1]); err == nil && searchRequested {
@@ -137,7 +143,9 @@ func prepSearchQueueSelector(commData []string, m *discordgo.MessageCreate) {
 	}
 }
 
+// Prepares the songs to be queued from the playlist
 func prepPlaylist(message string, m *discordgo.MessageCreate) {
+	// Check if the message contains a playlist by checking the list= parameter
 	if strings.Contains(message, "list=") {
 		println(m.Content)
 		playlistID := strings.SplitN(message, "list=", 2)[1]
@@ -146,9 +154,12 @@ func prepPlaylist(message string, m *discordgo.MessageCreate) {
 	}
 }
 
+// Prepares the song's format for playback (quality)
 func prepSongFormat(format youtube.FormatList, video *youtube.Video) *youtube.Format {
-	// Select the correct video format - Check if it's in the song quality list file first
+	// Select the correct video format - Check if it's in the song quality list file first. Default is 0.
 	formatList := &format[0]
+
+	// Check if the video title is in the bad quality list defined in songQualityIssues.json
 	for _, value := range badQualitySongs.BadQualitySongNodes {
 		if video.Title == value.Title {
 			if value.FormatNo < len(format) {
@@ -160,6 +171,7 @@ func prepSongFormat(format youtube.FormatList, video *youtube.Video) *youtube.Fo
 		}
 	}
 
+	// Check if the video author is in the bad quality list defined in songQualityIssues.json
 	for _, value := range badQualitySongs.BadQualityVids {
 		if video.Author == value.Author {
 			if value.FormatNo < len(format) {
@@ -174,6 +186,7 @@ func prepSongFormat(format youtube.FormatList, video *youtube.Video) *youtube.Fo
 	return formatList
 }
 
+// Preps the skip command
 func prepSkip() {
 	v.stop = true
 	v.speaking = false

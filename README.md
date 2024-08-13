@@ -26,16 +26,11 @@ Automuse requires the `bot` **scope** and several permissions on a server to wor
 
 # How to use
 - Run the project from within its directory - `go run .`
-- You may only use YouTube links
+- You may only use YouTube links (for now)
+- You must be in a voice channel in order to run commands, specifically the play command
+- Adding the -pl argument will play a YT playlist in its entirety
+- Playing additional songs will place the songs in a queue, if there is one
 - If you are experiencing sound quality issues, add them to the songQualityIssues.json file and choose a format (rarely needed)
-- Typing the play command in any text channel will trigger the bot to join your voice channel, you must be in a voice channel for this to work.
-- Adding the -pl argument will play the playlist or the playlist the video is associated to
-- Playing additional links will place the songs in a queue. 
-- The queue will auto-play until done.
-- You can skip songs in the queue.
-- You can play a specific song from the queue.
-- You can stop the current song and clear the queue.
-- When no songs are left in the queue, the bot will leave the channel. Play a new song to bring it back in your voice channel.
 
 ## Syntax
 ###### Base Commands to Use the Bot
