@@ -3,11 +3,9 @@ Automuse is a discord bot that plays music in a discord voice channel via comman
 
 The bot is still a WIP and may not work as intended.
 
-:point_right: Get/set your bot token [here](https://discord.com/developers/applications/)
+:point_right: Set up your bot on the discord developer portal [here](https://discord.com/developers/applications), and see the permissions section below for more information on how to configure it. You will also need to Get/set your bot token from here as well.
 
 :point_right: Follow the official YouTube documentation to get/set your YouTube API key [here](https://developers.google.com/youtube/v3/docs)
-
-:point_right: Set up your bot on the discord developer portal [here](https://discord.com/developers/applications), and see the permissions section below for more information on how to configure it.
 
 ## Permissions
 
