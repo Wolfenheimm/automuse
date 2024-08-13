@@ -19,10 +19,8 @@ func joinVoiceChannel() {
 			log.Println("ERROR: Guild ID: ", guildID)
 			log.Println("ERROR: Channel: ", generalChan)
 			log.Println("ERROR: Error to join in a voice channel: ", err)
-			if err != nil {
-				log.Println("error connecting:", err)
-				return
-			}
+			log.Println("error connecting:", err)
+			return
 		} else {
 			log.Println("error connecting:", err)
 			return
