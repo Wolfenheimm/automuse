@@ -25,7 +25,7 @@ Automuse requires the `bot` **scope** and several permissions on a server to wor
     - Env var: GENERAL_CHAT_ID <-- You may choose any voice channel in your server
 
 # How to use
-- Run the project brom within its directory - `go run .`
+- Run the project from within its directory - `go run .`
 - You may only use YouTube links
 - If you are experiencing sound quality issues, add them to the songQualityIssues.json file and choose a format
 - Typing the play command in any text channel will trigger the bot to join your voice channel, you must be in a voice channel for this to work.
