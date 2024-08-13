@@ -2,50 +2,14 @@
     "info": "Feel free to add songs in here if they are not playing properly / stuttering",
     "songs": [
         {
-            "title": "Future - Mask Off (Aesthetic Remix)",
+            "title": "Some - Song - Name",
             "formatNo": 1
-        },
-        {
-            "title": "Trespass in to the Domain of the Gods (slowed) Miss the Rage (AWM)",
-            "formatNo": 1
-        },
-        {
-            "title": "Undertale Remixed ▸ Spider Dance ▸ Holder Remix",
-            "formatNo": 1
-        },
-        {
-            "title": "Smooth McGroove - Zelda Medley cover",
-            "formatNo": 1
-        },
-        {
-            "title": "Learn 2 Play (You've got to play WoW) with Lyrics",
-            "formatNo": 2
-        },
-        {
-            "title": "Starcraft Zerg Theme 1",
-            "formatNo": 2
-        },
-        {
-            "title": "The Legend of Zelda Music for Working Out",
-            "formatNo": 2
         }
     ],
     "vids": [
         {
             "author": "MrBallen",
             "formatNo": 2
-        },
-        {
-            "author": "Comedy Dynamics",
-            "formatNo": 3
-        },
-        {
-            "author": "Comedy Central",
-            "formatNo": 3
-        },
-        {
-            "author": "Chubbyemu",
-            "formatNo": 1
         }
     ]
 }

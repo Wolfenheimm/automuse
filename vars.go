@@ -18,7 +18,7 @@ var (
 	s               *discordgo.Session
 	v               = new(VoiceInstance)
 	opts            = dca.StdEncodeOptions
-	client          = yt.Client{Debug: true}
+	client          = yt.Client{} // Enable debug mode
 	ctx             = context.Background()
 	song            = Song{}
 	searchQueue     = []SongSearch{}

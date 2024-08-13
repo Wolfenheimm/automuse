@@ -47,7 +47,7 @@ func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
 		}
 
 		if len(msgData) == 1 {
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Insufficiant parameters!")
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Insufficient parameters!")
 			return msgData, false
 		}
 
