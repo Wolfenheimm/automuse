@@ -62,5 +62,5 @@ func setUpDcaOptions() {
 	opts.FrameDuration = 20
 	opts.PacketLoss = 1
 	opts.VBR = true
-	opts.BufferedFrames = 10000
+	opts.BufferedFrames = 20000
 }
