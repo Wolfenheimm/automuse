@@ -7,7 +7,9 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// Plays the queue
+// This is the main function that plays the queue
+// - It will play the queue until it's empty
+// - If the queue is empty, it will leave the voice channel
 func playQueue(m *discordgo.MessageCreate, isManual bool) {
 	// Iterate through the queue, playing each song
 	for len(queue) > 0 {

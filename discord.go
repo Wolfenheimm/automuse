@@ -7,7 +7,10 @@ import (
 
 // Joins the voice channel designated by the environment variables
 func joinVoiceChannel() {
-	// Get the channel of the person who made the request
+	// It was a chosen decision to have hard-coded guild and channel IDs
+	// - This is because the bot is only used in one server, and the voice channel is always the same
+	// - If you want to use this bot in different channels, there is definitely a dynamic way to do this
+	// Note: It might not be possible for the bot to join multiple channels at once, this hasn't been tested
 	generalChan := os.Getenv("GENERAL_CHAT_ID") // original value for guild id = v.guildID
 	guildID := os.Getenv("GUILD_ID")
 

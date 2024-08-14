@@ -17,18 +17,22 @@ func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
 	parsedContent = strings.Split(parsedContent, "&t=")[0]
 	msgData := strings.Split(parsedContent, " ")
 
+	// If the message data is not empty, check if the user entered a valid command
 	if len(msgData) > 0 {
 		var tmp []string
 		selectionPass := true
 		playlistPass := true
 		playWasCalled := false
 
-		// Remove any blank elements
+		// Remove any blank elements from the message data
 		for _, value := range msgData {
+			// If the value is not a space or empty, append it to the temporary slice
 			if value != " " && len(value) != 0 {
+				// If the value is play, and it has not been called yet, append it
 				if !playWasCalled && value == "play" {
 					tmp = append(tmp, value)
 					playWasCalled = true
+					// TODO: Validate this clause...
 				} else if playWasCalled && value != "play" {
 					tmp = append(tmp, value)
 				}

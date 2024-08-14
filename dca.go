@@ -17,6 +17,7 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool) {
 	var err error
 
 	// TODO: Consider removing mpeg support
+	// - Might leave this here for folks that make their own music and want to play it in the bot
 	if isMpeg {
 		dirPath := "mpegs/" + path
 		log.Println("INFO: Encoding MPEG file at path:", dirPath)
