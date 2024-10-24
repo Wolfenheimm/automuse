@@ -1,7 +1,7 @@
 # AutoMuse
-Automuse is a discord bot that plays music in a discord voice channel via commands. At the moment, only youtube video or playlist links can be played. It's also possible to query youtube instead of entering links and choose from a menu. Feel free to add songs to the songQualityIssues.json file, I take requests and add them in!
+Automuse is a discord bot that plays YouTube music in a discord voice channel via commands.
 
-The bot is still a WIP and may not work as intended.
+The bot is still a WIP and has some kinks from time to time.
 
 :point_right: Set up your bot on the discord developer portal [here](https://discord.com/developers/applications), and see the permissions section below for more information on how to configure it. You will also need to Get/set your bot token from here as well.
 
@@ -15,22 +15,31 @@ Automuse requires the `bot` **scope** and several permissions on a server to wor
 - `Speak`
 
 # Requirements
-- GoLang 1.19
-- A Discord bot token placed in an environment variable (See Link Above)
-     - Env var: BOT_TOKEN
-- A YouTube API Key placed in an environment variable (See Link Above)
-    - Env var: YT_TOKEN
-- Your Discord Guild ID and Channel ID placed in environment variables
-    - Env var: GUILD_ID
-    - Env var: GENERAL_CHAT_ID <-- You may choose any voice channel in your server
+- GoLang 1.23
+- A Linux environment:
+    - A [Discord Bot Token](https://discord.com/developers/applications) placed in an environment variable
+        - Env var: BOT_TOKEN
+    - A [YouTube API Key]((https://developers.google.com/youtube/v3/docs)) placed in an environment variable
+        - Env var: YT_TOKEN
+    - Your Discord Guild ID and Channel ID placed in environment variables
+        - Env var: GUILD_ID
+        - Env var: GENERAL_CHAT_ID <-- You may choose any voice channel in your server
+        - Tip: Enable Developer Mode in Discord to get this information
+    - The Discord Bot will require the following OAuth2 permissions:
+        - Scope:
+            - Bot
+        - Permissions:
+            - Connect
+            - Speak
+            - Send Messages
+    
 
 # How to use
 - Run the project from within its directory - `go run .`
-- You may only use YouTube links (for now)
-- You must be in a voice channel in order to run commands, specifically the play command
-- Adding the -pl argument will play a YT playlist in its entirety
-- Playing additional songs will place the songs in a queue, if there is one
-- If you are experiencing sound quality issues, add them to the songQualityIssues.json file and choose a format (rarely needed)
+- You may only use YouTube links & it doesn't necessarily have to be a song
+- You must be in a voice channel in order to play content from YT
+- Adding the -pl argument will play a YT playlist in its entirety, provided the URL is a public playlist
+- Playing additional content while one is playing will place the content in a queue
 
 ## Syntax
 ###### Base Commands to Use the Bot

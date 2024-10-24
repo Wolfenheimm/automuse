@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"os"
 	"os/signal"
@@ -28,10 +27,6 @@ func init() {
 	}
 
 	setUpDcaOptions() // Encoder Settings
-
-	// Read & store the list of bad quality songs
-	file, _ := os.ReadFile("songQualityIssues.json")
-	_ = json.Unmarshal([]byte(file), &badQualitySongs)
 
 	v.stop = true // Used to check if the bot is in channel playing music.
 	searchRequested = false
