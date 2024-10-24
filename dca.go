@@ -59,11 +59,12 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool) {
 func setUpDcaOptions() {
 	opts.RawOutput = false
 	opts.Bitrate = 128
-	opts.Application = "lowdelay"
+	opts.Application = dca.AudioApplicationLowDelay
 	opts.Volume = 100
 	opts.CompressionLevel = 10
+	opts.FrameRate = 48000
 	opts.FrameDuration = 20
 	opts.PacketLoss = 1
 	opts.VBR = true
-	opts.BufferedFrames = 15000
+	opts.BufferedFrames = 17000
 }
