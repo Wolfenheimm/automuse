@@ -158,7 +158,7 @@ func prepPlaylist(message string, m *discordgo.MessageCreate) {
 }
 
 // Prepares the song's format for playback (quality)
-func prepSongFormat(format youtube.FormatList, video *youtube.Video) *youtube.Format {
+func prepSongFormat(format youtube.FormatList) *youtube.Format {
 	// Select the correct video format - Check if it's in the song quality list file first. Default is 0.
 	formatList := &format[0]
 
