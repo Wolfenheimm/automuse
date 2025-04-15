@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"strconv"
 	"strings"
 
@@ -159,10 +160,28 @@ func prepPlaylist(message string, m *discordgo.MessageCreate) {
 
 // Prepares the song's format for playback (quality)
 func prepSongFormat(format youtube.FormatList) *youtube.Format {
-	// Select the correct video format - Check if it's in the song quality list file first. Default is 0.
-	formatList := &format[0]
+	// First try to find formats without cipher requirements
+	for _, f := range format {
+		// Check if the format has a direct URL (no cipher)
+		if f.URL != "" && f.Cipher == "" {
+			log.Printf("[DEBUG] Found format without cipher: Itag=%d, Quality=%s, MimeType=%s",
+				f.ItagNo, f.Quality, f.MimeType)
+			return &f
+		}
+	}
 
-	return formatList
+	// If no direct URL formats found, try audio-only formats
+	for _, f := range format {
+		if f.ItagNo == 140 || f.ItagNo == 251 || f.ItagNo == 250 || f.ItagNo == 249 {
+			log.Printf("[DEBUG] Selected audio-only format: Itag=%d, Quality=%s, MimeType=%s",
+				f.ItagNo, f.Quality, f.MimeType)
+			return &f
+		}
+	}
+
+	// If no suitable format found, fall back to the first format
+	log.Printf("[DEBUG] No suitable format found, falling back to first format")
+	return &format[0]
 }
 
 // Preps the skip command

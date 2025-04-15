@@ -29,15 +29,25 @@ type SongSearch struct {
 	Name string
 }
 
+// Command struct for commands
+type Command struct {
+	Name        string
+	Description string
+	Execute     func(s *discordgo.Session, m *discordgo.MessageCreate, args []string)
+}
+
+// VoiceInstance struct for voice connection
 type VoiceInstance struct {
-	voice      *discordgo.VoiceConnection
 	session    *discordgo.Session
+	guildID    string
+	voice      *discordgo.VoiceConnection
 	encoder    *dca.EncodeSession
 	stream     *dca.StreamingSession
+	volume     int
+	isPaused   bool
 	nowPlaying Song
-	guildID    string
-	speaking   bool
 	stop       bool
+	speaking   bool
 }
 
 type BadQualitySongNodes struct {

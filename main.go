@@ -26,8 +26,6 @@ func init() {
 		log.Fatalf("Error creating new YouTube client: %v", err)
 	}
 
-	setUpDcaOptions() // Encoder Settings
-
 	v.stop = true // Used to check if the bot is in channel playing music.
 	searchRequested = false
 }
@@ -75,6 +73,8 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 			go queueStuff(m)
 		} else if m.Content == "play kudasai" {
 			go queueKudasai(m)
+		} else if m.Content == "playspecial" {
+			go playSpecialFile(s, m)
 		} else if strings.Contains(m.Content, "play") {
 			go queueSong(m)
 		} else if m.Content == "stop" {

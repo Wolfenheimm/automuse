@@ -15,6 +15,16 @@ var (
 	maxResults = flag.Int64("max-results", 10, "Max YouTube results")
 )
 
+// YouTubeFormat represents a YouTube video format
+type YouTubeFormat struct {
+	Itag          int
+	URL           string
+	MimeType      string
+	Quality       string
+	AudioChannels int
+	Cipher        string
+}
+
 // Retrieve playlistItems in the specified playlist
 func searchQueryList(req string) map[string]string {
 	// Make the API call to YouTube.
@@ -97,4 +107,85 @@ func printIDs(sectionName string, matches map[string]string) {
 		fmt.Printf("[%v] %v\n", id, title)
 	}
 	fmt.Printf("\n\n")
+}
+
+// getBestFormat selects the best format for streaming
+func getBestFormat(formats []*YouTubeFormat) (*YouTubeFormat, error) {
+	// First try to find an audio-only format
+	for _, format := range formats {
+		if format.AudioChannels > 0 && !strings.Contains(format.MimeType, "video") {
+			log.Printf("[DEBUG] Found audio-only format: Itag=%d, Quality=%s, MimeType=%s, AudioChannels=%d",
+				format.Itag, format.Quality, format.MimeType, format.AudioChannels)
+			return format, nil
+		}
+	}
+
+	// If no audio-only format found, fall back to the first format with audio
+	for _, format := range formats {
+		if format.AudioChannels > 0 {
+			log.Printf("[DEBUG] Found format with audio: Itag=%d, Quality=%s, MimeType=%s, AudioChannels=%d",
+				format.Itag, format.Quality, format.MimeType, format.AudioChannels)
+			return format, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no suitable format found")
+}
+
+// getStreamURL gets the stream URL for a video
+func getStreamURL(videoID string) (string, error) {
+	// Get the formats
+	formats, err := ParseFormats(videoID)
+	if err != nil {
+		return "", err
+	}
+
+	if len(formats) == 0 {
+		return "", fmt.Errorf("no formats available")
+	}
+
+	// Log available formats
+	log.Printf("[DEBUG] Video formats available: %d", len(formats))
+	audioFormats := 0
+	for _, format := range formats {
+		if format.AudioChannels > 0 {
+			audioFormats++
+			log.Printf("[DEBUG] Format %d: Itag=%d, Quality=%s, MimeType=%s, AudioChannels=%d",
+				audioFormats, format.Itag, format.Quality, format.MimeType, format.AudioChannels)
+		}
+	}
+	log.Printf("[DEBUG] Found %d formats with audio channels", audioFormats)
+
+	// Get the best format
+	format, err := getBestFormat(formats)
+	if err != nil {
+		return "", err
+	}
+
+	log.Printf("[DEBUG] Trying format: Itag=%d, Quality=%s, MimeType=%s",
+		format.Itag, format.Quality, format.MimeType)
+
+	// Get the stream URL with signature
+	url, err := getStreamURLWithSignature(videoID, format)
+	if err != nil {
+		return "", err
+	}
+
+	log.Printf("[DEBUG] Successfully got stream URL for format %d: %s", format.Itag, url)
+	return url, nil
+}
+
+// ParseFormats parses the formats from a YouTube video page
+func ParseFormats(videoID string) ([]*YouTubeFormat, error) {
+	// TODO: Implement format parsing from YouTube video page
+	// For now, we'll return a basic format
+	return []*YouTubeFormat{
+		{
+			Itag:          140,
+			URL:           fmt.Sprintf("https://rr2---sn-t0aedn7l.googlevideo.com/videoplayback?id=%s&itag=140", videoID),
+			MimeType:      "audio/mp4",
+			Quality:       "medium",
+			AudioChannels: 2,
+		},
+	}, nil
 }

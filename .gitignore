@@ -1,3 +1,33 @@
+# IDE
 .vscode
+.idea
+
+# Audio files
 *.mp3
 *.wav
+*.webm
+*.dca
+
+# Binaries and executables
+automuse
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Backup files
+*.bak
+*~
+
+# Test binary, built with 'go test -c'
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories (remove these if you want to check in your vendor folder)
+vendor/
+
+# Go workspace file
+go.work

@@ -1,57 +1,148 @@
-# AutoMuse
-Automuse is a discord bot that plays YouTube music in a discord voice channel via commands.
+# AutoMuse Discord Music Bot
 
-The bot is still a WIP and has some kinks from time to time.
+A high-performance Discord music bot written in Go that supports YouTube playback with advanced audio handling and playlist management.
 
-:point_right: Set up your bot on the discord developer portal [here](https://discord.com/developers/applications), and see the permissions section below for more information on how to configure it. You will also need to Get/set your bot token from here as well.
+## Features
 
-:point_right: Follow the official YouTube documentation to get/set your YouTube API key [here](https://developers.google.com/youtube/v3/docs)
+- 🎵 YouTube video and playlist playback
+- 🔊 High-quality audio streaming using DCA (Discord Compressed Audio)
+- 📋 Queue management system
+- 🔍 YouTube search functionality
+- 💾 Audio caching for faster playback
+- ⚡ Low-latency voice channel handling
 
-## Permissions
+## Prerequisites
 
-Automuse requires the `bot` **scope** and several permissions on a server to work properly. Therefore, ensure to set these in the developer portal during the creation of the invite link:
-- `Send Messages`
-- `Connect`
-- `Speak`
+### Required Software
 
-# Requirements
-- GoLang 1.23
-- A Linux environment:
-    - A [Discord Bot Token](https://discord.com/developers/applications) placed in an environment variable
-        - Env var: BOT_TOKEN
-    - A [YouTube API Key]((https://developers.google.com/youtube/v3/docs)) placed in an environment variable
-        - Env var: YT_TOKEN
-    - Your Discord Guild ID and Channel ID placed in environment variables
-        - Env var: GUILD_ID
-        - Env var: GENERAL_CHAT_ID <-- You may choose any voice channel in your server
-        - Tip: Enable Developer Mode in Discord to get this information
-    - The Discord Bot will require the following OAuth2 permissions:
-        - Scope:
-            - Bot
-        - Permissions:
-            - Connect
-            - Speak
-            - Send Messages
-    
+- Go 1.19 or higher
+- FFmpeg
+- yt-dlp
+- Git
 
-# How to use
-- Run the project from within its directory - `go run .`
-- You may only use YouTube links & it doesn't necessarily have to be a song
-- You must be in a voice channel in order to play content from YT
-- Adding the -pl argument will play a YT playlist in its entirety, provided the URL is a public playlist
-- Playing additional content while one is playing will place the content in a queue
+### Installation Instructions
 
-## Syntax
-###### Base Commands to Use the Bot
-````
-play https://www.youtube.com/watch?v=<VIDEO-ID>                         -> Plays/Queues a video(audio)
-play https://www.youtube.com/playlist?list=<PLAYLIST-ID>                -> Plays/Queues a playlist
-play -pl https://www.youtube.com/watch?v=<VIDEO-ID>&list=<PLAYLIST-ID>  -> Plays/Queues a playlist
-play #                                                                  -> Plays a video(audio) from the queue & skips song playing
-play your search query string                                           -> Shows a list of videos, prompt: play # after to queue
-skip                                                                    -> Skips the current Song
-skip to #                                                               -> Skips to a specific song in the playlist
-stop                                                                    -> Stops the current song and clears the queue
-queue                                                                   -> Shows the current queue in chat
-remove #                                                                -> Remove a song from queue at number #
-````
+#### For macOS:
+
+```bash
+# Install Homebrew if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install required packages
+brew install go
+brew install ffmpeg
+brew install yt-dlp
+```
+
+#### For Debian/Ubuntu:
+
+```bash
+# Update package list
+sudo apt update
+
+# Install Go
+sudo apt install golang-go
+
+# Install FFmpeg
+sudo apt install ffmpeg
+
+# Install yt-dlp
+sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+sudo chmod a+rx /usr/local/bin/yt-dlp
+```
+
+## Setup
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/Wolfenheimm/automuse.git
+cd automuse
+```
+
+2. Install Go dependencies:
+
+```bash
+go mod download
+```
+
+3. Set up your environment variables:
+
+```bash
+export DISCORD_TOKEN="your_discord_bot_token"
+export YT_TOKEN="your_youtube_api_token"
+```
+
+4. Build the bot:
+
+```bash
+go build -o automuse
+```
+
+## Running the Bot
+
+```bash
+./automuse
+```
+
+## Commands
+
+- `play [URL]` - Play a YouTube video
+- `play -pl [URL]` - Play a YouTube playlist
+- `play [number]` - Play a song from the queue or search results
+- `skip` - Skip the current song
+- `queue` - Show the current queue
+- `search [query]` - Search for a song on YouTube
+
+## Dependencies
+
+The bot uses several Go packages:
+
+- `github.com/bwmarrin/discordgo` - Discord API wrapper
+- `github.com/jonas747/dca` - Discord audio encoding
+- `github.com/kkdai/youtube/v2` - YouTube video processing
+- `google.golang.org/api/youtube/v3` - YouTube API client
+
+## Audio Processing
+
+AutoMuse uses DCA (Discord Compressed Audio) for optimal audio streaming:
+
+- Converts YouTube videos to MP3 format
+- Encodes audio with optimal settings for Discord
+- Implements keep-alive mechanisms for stable playback
+- Caches downloaded audio for faster repeated playback
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Bot not joining voice channel:**
+
+   - Ensure the bot has proper permissions
+   - Check if the bot token is correct
+   - Verify the voice channel is accessible
+
+2. **Audio not playing:**
+
+   - Check if FFmpeg is properly installed
+   - Verify yt-dlp is up to date
+   - Ensure the YouTube API token is valid
+
+3. **Poor audio quality:**
+   - Check your internet connection
+   - Verify the voice channel region
+   - Ensure the bot has sufficient bandwidth
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Discord Go community for their excellent documentation
+- YouTube-DL project for video processing capabilities
+- FFmpeg team for audio processing tools
