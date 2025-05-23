@@ -186,9 +186,28 @@ func prepSongFormat(format youtube.FormatList) *youtube.Format {
 
 // Preps the skip command
 func prepSkip() {
+	log.Printf("INFO: Skip command initiated")
 	v.stop = true
 	v.speaking = false
-	if v.encoder != nil {
-		v.encoder.Cleanup()
+
+	// Force stop the current audio stream
+	if v.voice != nil {
+		v.voice.Speaking(false)
+		log.Printf("INFO: Set speaking to false for skip")
 	}
+
+	// Cleanup encoder if it exists
+	if v.encoder != nil {
+		log.Printf("INFO: Cleaning up encoder for skip")
+		v.encoder.Cleanup()
+		v.encoder = nil
+	}
+
+	// Cleanup stream if it exists
+	if v.stream != nil {
+		log.Printf("INFO: Cleaning up stream for skip")
+		v.stream = nil
+	}
+
+	log.Printf("INFO: Skip preparation completed")
 }

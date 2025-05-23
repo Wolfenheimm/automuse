@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -22,17 +23,60 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 			break
 		}
 
-		v.stop = false
-		v.voice.Speaking(true)
+		log.Printf("INFO: Starting playback of: %s", v.nowPlaying.Title)
 
-		// TODO: Consider removing mpeg support
-		if isManual {
-			v.DCA(v.nowPlaying.Title, isManual)
-		} else {
-			v.DCA(v.nowPlaying.VideoURL, isManual)
+		// Reset stop flag for this song
+		v.stop = false
+
+		if v.voice != nil {
+			v.voice.Speaking(true)
 		}
 
-		// Queue not empty, next song isn't empty (incase nil song in queue)
+		// Create a channel to signal when audio playback is complete
+		audioComplete := make(chan bool, 1)
+
+		// Start audio playback in a separate goroutine
+		go func() {
+			// TODO: Consider removing mpeg support
+			if isManual {
+				v.DCA(v.nowPlaying.Title, isManual)
+			} else {
+				v.DCA(v.nowPlaying.VideoURL, isManual)
+			}
+			audioComplete <- true
+		}()
+
+		// Monitor for skip commands while audio plays
+		skipDetected := false
+		ticker := time.NewTicker(100 * time.Millisecond)
+
+	monitorLoop:
+		for {
+			select {
+			case <-ticker.C:
+				// Check if skip was called
+				if v.stop {
+					log.Printf("INFO: Skip detected in playQueue monitor, stopping current song")
+					skipDetected = true
+					ticker.Stop()
+					break monitorLoop
+				}
+			case <-audioComplete:
+				// Audio finished normally
+				log.Printf("INFO: Audio playback completed normally")
+				ticker.Stop()
+				break monitorLoop
+			}
+		}
+
+		if skipDetected {
+			log.Printf("INFO: Skip detected, moving to next song")
+			// Give a moment for cleanup
+			time.Sleep(100 * time.Millisecond)
+			continue // Skip to next song
+		}
+
+		// Song completed normally, show next song message if queue not empty
 		if len(queue) != 0 && queue[0].Title != "" {
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Next! Now playing ["+queue[0].Title+"] :loop:")
 		}
@@ -43,7 +87,9 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 	v.stop = true
 	v.nowPlaying = Song{}
 	queue = []Song{}
-	v.voice.Disconnect()
+	if v.voice != nil {
+		v.voice.Disconnect()
+	}
 
 	// Cleanup the encoder
 	if v.encoder != nil {

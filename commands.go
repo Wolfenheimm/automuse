@@ -306,6 +306,12 @@ func playMP3Direct(s *discordgo.Session, guildID, channelID, filePath string) {
 
 		// Send audio data to Discord
 		for {
+			// Check if skip was called
+			if v.stop {
+				log.Printf("INFO: Skip detected during playMP3Direct audio sending, stopping")
+				break
+			}
+
 			// Read audio data
 			err = binary.Read(ffmpegbuf, binary.LittleEndian, &audiobuf)
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -340,6 +346,20 @@ func playMP3Direct(s *discordgo.Session, guildID, channelID, filePath string) {
 	for {
 		select {
 		case <-ticker.C:
+			// Check if skip was called
+			if v.stop {
+				log.Printf("INFO: Skip detected during playMP3Direct main loop, stopping")
+				// Kill ffmpeg process
+				if cmd.Process != nil {
+					cmd.Process.Kill()
+				}
+				// Set speaking to false
+				if vc != nil && vc.Ready {
+					vc.Speaking(false)
+				}
+				return
+			}
+
 			// Keep the speaking state alive
 			if vc != nil && vc.Ready {
 				vc.Speaking(true)

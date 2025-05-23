@@ -286,16 +286,42 @@ func (v *VoiceInstance) DirectDCA(filePath string) {
 		// which is a good sign, so continue waiting for the full stream
 		log.Printf("DEBUG: Stream running for 2+ seconds, continuing to monitor")
 
-		// Now wait for the actual stream to complete
-		streamErr := <-done
-		keepAlive = false
-		duration := time.Since(streamStartTime)
+		// Create a ticker to check for skip during playback
+		skipCheckTicker := time.NewTicker(100 * time.Millisecond)
+		defer skipCheckTicker.Stop()
 
-		log.Printf("INFO: Stream lasted for %.2f seconds", duration.Seconds())
-		if streamErr != nil && streamErr != io.EOF {
-			log.Printf("ERROR: DCA stream error: %v", streamErr)
-		} else {
-			log.Printf("INFO: DCA stream completed successfully")
+		// Wait for either stream completion or skip command
+		for {
+			select {
+			case streamErr := <-done:
+				keepAlive = false
+				duration := time.Since(streamStartTime)
+
+				log.Printf("INFO: Stream lasted for %.2f seconds", duration.Seconds())
+				if streamErr != nil && streamErr != io.EOF {
+					log.Printf("ERROR: DCA stream error: %v", streamErr)
+				} else {
+					log.Printf("INFO: DCA stream completed successfully")
+				}
+				goto cleanup
+
+			case <-skipCheckTicker.C:
+				// Check if skip was called
+				if v.stop {
+					log.Printf("INFO: Skip detected during playback, stopping stream")
+					keepAlive = false
+
+					// Stop the stream
+					if v.stream != nil {
+						// There's no direct stop method, so we'll cleanup the encoder
+						// which should stop the stream
+						if v.encoder != nil {
+							v.encoder.Cleanup()
+						}
+					}
+					goto cleanup
+				}
+			}
 		}
 
 	case streamErr := <-done:
@@ -321,6 +347,7 @@ func (v *VoiceInstance) DirectDCA(filePath string) {
 		}
 	}
 
+cleanup:
 	// Stop speaking
 	if v.voice != nil {
 		log.Printf("INFO: Setting speaking state to false")
@@ -428,6 +455,12 @@ func (v *VoiceInstance) playWithFFmpeg(filePath string) {
 	// Read and send frames
 	frameCount := 0
 	for {
+		// Check if skip was called
+		if v.stop {
+			log.Printf("INFO: Skip detected during ffmpeg playback, stopping")
+			break
+		}
+
 		frame, err := decoder.OpusFrame()
 		if err != nil {
 			if err != io.EOF {
