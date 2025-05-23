@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os/exec"
 	"strconv"
@@ -15,13 +16,15 @@ import (
 // - If the queue is empty, it will leave the voice channel
 func playQueue(m *discordgo.MessageCreate, isManual bool) {
 	// Iterate through the queue, playing each song
-	for len(queue) > 0 {
-		if len(queue) != 0 {
-			v.nowPlaying, queue = queue[0], queue[1:]
-		} else {
-			v.nowPlaying = Song{}
+	for {
+		// Thread-safe queue access
+		queueMutex.Lock()
+		if len(queue) == 0 {
+			queueMutex.Unlock()
 			break
 		}
+		v.nowPlaying, queue = queue[0], queue[1:]
+		queueMutex.Unlock()
 
 		log.Printf("INFO: Starting playback of: %s", v.nowPlaying.Title)
 
@@ -77,8 +80,16 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 		}
 
 		// Song completed normally, show next song message if queue not empty
-		if len(queue) != 0 && queue[0].Title != "" {
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Next! Now playing ["+queue[0].Title+"] :loop:")
+		queueMutex.Lock()
+		hasNextSong := len(queue) > 0 && queue[0].Title != ""
+		var nextSongTitle string
+		if hasNextSong {
+			nextSongTitle = queue[0].Title
+		}
+		queueMutex.Unlock()
+
+		if hasNextSong {
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Next! Now playing ["+nextSongTitle+"] :loop:")
 		}
 	}
 
@@ -86,7 +97,11 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing left to play, peace! :v:")
 	v.stop = true
 	v.nowPlaying = Song{}
+
+	queueMutex.Lock()
 	queue = []Song{}
+	queueMutex.Unlock()
+
 	if v.voice != nil {
 		v.voice.Disconnect()
 	}
@@ -142,7 +157,11 @@ func queueSingleSong(m *discordgo.MessageCreate, link string) {
 	// Fill Song Info - Make sure we set the video title correctly
 	song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.Title, video.ID+".mp3", video.Duration.String())
 	song.VideoURL = url
+
+	// Thread-safe queue append
+	queueMutex.Lock()
 	queue = append(queue, song)
+	queueMutex.Unlock()
 
 	// Message the user
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Adding ["+video.Title+"] to the Queue  :musical_note:")
@@ -287,10 +306,187 @@ func queueWithYtDlp(m *discordgo.MessageCreate, link string) bool {
 	// Create the song entry with a special flag to indicate it needs yt-dlp download
 	song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, title, videoID+".mp3", duration)
 	song.VideoURL = link // Store original URL for yt-dlp processing
+
+	// Thread-safe queue append
+	queueMutex.Lock()
 	queue = append(queue, song)
+	queueMutex.Unlock()
 
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Adding ["+title+"] to the Queue (using fallback method) :musical_note:")
 	log.Printf("[INFO] Successfully queued restricted video using yt-dlp: %s", title)
 
+	return true
+}
+
+// queuePlaylistThreaded processes playlists by starting the first song immediately
+// and downloading the rest in background threads
+func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
+	log.Printf("INFO: Starting threaded playlist processing for: %s", playlistID)
+
+	var allVideoIds []string
+	nextPageToken := ""
+
+	// First pass: collect all video IDs from the playlist
+	for {
+		var snippet = []string{"snippet"}
+		playlistResponse := playlistItemsList(service, snippet, playlistID, nextPageToken)
+
+		for _, playlistItem := range playlistResponse.Items {
+			videoId := playlistItem.Snippet.ResourceId.VideoId
+			allVideoIds = append(allVideoIds, videoId)
+		}
+
+		nextPageToken = playlistResponse.NextPageToken
+		if nextPageToken == "" {
+			break
+		}
+	}
+
+	if len(allVideoIds) == 0 {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** No videos found in playlist or playlist is private.")
+		return
+	}
+
+	log.Printf("INFO: Found %d videos in playlist", len(allVideoIds))
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Found %d videos! Starting first song, processing rest in background...", len(allVideoIds)))
+
+	// Process the first video immediately to start playback
+	firstVideoURL := "https://www.youtube.com/watch?v=" + allVideoIds[0]
+	log.Printf("INFO: Processing first video immediately: %s", allVideoIds[0])
+
+	// Queue the first song using the regular method
+	queueSingleSong(m, firstVideoURL)
+
+	// Note: Playback will be started by the main queueSong function, not here
+
+	// Process remaining videos in background if there are more than 1
+	if len(allVideoIds) > 1 {
+		remainingVideos := allVideoIds[1:]
+		log.Printf("INFO: Starting background processing for %d remaining videos", len(remainingVideos))
+
+		go func() {
+			songsProcessed := 1 // First song already processed
+
+			// Use a semaphore to limit concurrent processing
+			maxConcurrent := 3
+			semaphore := make(chan struct{}, maxConcurrent)
+
+			// Process remaining videos in parallel
+			for i, videoId := range remainingVideos {
+				semaphore <- struct{}{} // Acquire semaphore
+
+				go func(videoId string, index int) {
+					defer func() { <-semaphore }() // Release semaphore
+
+					videoURL := "https://www.youtube.com/watch?v=" + videoId
+					log.Printf("INFO: Background processing video %d/%d: %s", index+2, len(allVideoIds), videoId)
+
+					// Try to get video info first
+					video, err := client.GetVideo(videoURL)
+					if err != nil {
+						log.Printf("[ERROR] Failed to get video info for %s: %v", videoId, err)
+
+						// Try yt-dlp fallback for restricted videos
+						if strings.Contains(err.Error(), "age restriction") || strings.Contains(err.Error(), "embedding") || strings.Contains(err.Error(), "disabled") {
+							log.Printf("[INFO] Trying yt-dlp fallback for restricted video: %s", videoId)
+							if queueWithYtDlpBackground(videoURL, m.ChannelID, m.Author.ID, m.ID) {
+								songsProcessed++
+								log.Printf("[INFO] Background queued via yt-dlp (%d/%d): %s", songsProcessed, len(allVideoIds), videoId)
+							}
+						}
+						return
+					}
+
+					// Try to get stream URL
+					url, err := getStreamURL(video.ID)
+					if err != nil {
+						log.Printf("[ERROR] Failed to get stream URL for %s: %v", video.Title, err)
+
+						// Try yt-dlp fallback
+						if queueWithYtDlpBackground(videoURL, m.ChannelID, m.Author.ID, m.ID) {
+							songsProcessed++
+							log.Printf("[INFO] Background queued via yt-dlp fallback (%d/%d): %s", songsProcessed, len(allVideoIds), video.Title)
+						}
+						return
+					}
+
+					// Create song and add to queue safely
+					song := fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.Title, video.ID+".mp3", video.Duration.String())
+					song.VideoURL = url
+
+					// Thread-safe queue append
+					queueMutex.Lock()
+					queue = append(queue, song)
+					queueMutex.Unlock()
+
+					songsProcessed++
+
+					log.Printf("[INFO] Background queued (%d/%d): %s", songsProcessed, len(allVideoIds), video.Title)
+
+					// Send update every 5 songs or on completion
+					if songsProcessed%5 == 0 || songsProcessed == len(allVideoIds) {
+						s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Processed %d/%d songs from playlist :musical_note:", songsProcessed, len(allVideoIds)))
+					}
+
+				}(videoId, i)
+			}
+		}()
+	}
+
+	log.Printf("INFO: Threaded playlist processing initiated for %d videos", len(allVideoIds))
+}
+
+// queueWithYtDlpBackground is a background-safe version that doesn't trigger playback
+func queueWithYtDlpBackground(link, channelID, authorID, messageID string) bool {
+	// Extract video ID from the link
+	var videoID string
+	if strings.Contains(link, "youtube.com/watch?v=") {
+		parts := strings.Split(link, "v=")
+		if len(parts) > 1 {
+			videoID = strings.Split(parts[1], "&")[0]
+		}
+	} else if strings.Contains(link, "youtu.be/") {
+		parts := strings.Split(link, "youtu.be/")
+		if len(parts) > 1 {
+			videoID = strings.Split(parts[1], "?")[0]
+		}
+	}
+
+	if videoID == "" {
+		log.Printf("[ERROR] Could not extract video ID from URL: %s", link)
+		return false
+	}
+
+	log.Printf("[INFO] Using yt-dlp fallback for video ID: %s", videoID)
+
+	// Use yt-dlp to get video info
+	cmd := exec.Command("yt-dlp", "--no-download", "--print", "title", "--print", "duration", link)
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("[ERROR] yt-dlp failed to get video info: %v", err)
+		return false
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) < 2 {
+		log.Printf("[ERROR] yt-dlp returned unexpected output format")
+		return false
+	}
+
+	title := strings.TrimSpace(lines[0])
+	duration := strings.TrimSpace(lines[1])
+
+	log.Printf("[INFO] yt-dlp got video info: %s (duration: %s)", title, duration)
+
+	// Create the song entry
+	song := fillSongInfo(channelID, authorID, messageID, title, videoID+".mp3", duration)
+	song.VideoURL = link // Store original URL for yt-dlp processing
+
+	// Thread-safe queue append
+	queueMutex.Lock()
+	queue = append(queue, song)
+	queueMutex.Unlock()
+
+	log.Printf("[INFO] Successfully queued restricted video using yt-dlp: %s", title)
 	return true
 }

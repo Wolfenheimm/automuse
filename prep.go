@@ -111,14 +111,37 @@ func prepPlaylistCommand(commData []string, m *discordgo.MessageCreate) {
 }
 
 // Checks if the user is queuing a song or playlist
-func prepWatchCommand(commData []string, m *discordgo.MessageCreate) {
-	if strings.Contains(commData[1], "list=") {
+func prepWatchCommand(commData []string, m *discordgo.MessageCreate) bool {
+	// Check if this is a playlist URL (contains list=PL)
+	if strings.Contains(commData[1], "list=PL") {
+		log.Printf("INFO: Detected playlist URL: %s", commData[1])
+
+		// Extract the playlist ID
+		parts := strings.SplitN(commData[1], "list=", 2)
+		if len(parts) > 1 {
+			playlistPart := parts[1]
+			// Remove any additional parameters after the playlist ID
+			playlistID := strings.Split(playlistPart, "&")[0]
+
+			log.Printf("INFO: Extracted playlist ID: %s", playlistID)
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Detected playlist! Starting first song and queuing rest in background... :infinity:")
+
+			// Start the threaded playlist processing
+			queuePlaylistThreaded(playlistID, m)
+			return true // Indicate that playback was already started
+		} else {
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Could not extract playlist ID from URL")
+		}
+	} else if strings.Contains(commData[1], "list=") {
+		// Extract just the video part (before list=) for regular lists (not playlists)
 		queueSingleSong(m, strings.SplitN(commData[1], "list=", 2)[0])
 	} else if strings.Contains(commData[1], "watch?") && !strings.Contains(commData[1], "list=") {
+		// Regular single video
 		queueSingleSong(m, commData[1])
 	} else {
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** The url must be the second or third parameter")
 	}
+	return false // Regular queueing, no playback started yet
 }
 
 // Prepares the play command when a song is manually entered - TODO: perhaps manual entry should be removed...

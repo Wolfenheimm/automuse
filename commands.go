@@ -23,6 +23,7 @@ import (
 func queueSong(m *discordgo.MessageCreate) {
 	commData, commDataIsValid := sanitizeQueueSongInputs(m)
 	queueLenBefore := len(queue)
+	playbackAlreadyStarted := false
 
 	if commDataIsValid {
 		// Check if a youtube link is present
@@ -31,7 +32,7 @@ func queueSong(m *discordgo.MessageCreate) {
 			if strings.Contains(m.Content, "list") && strings.Contains(m.Content, "-pl") || strings.Contains(m.Content, "/playlist?") {
 				prepPlaylistCommand(commData, m)
 			} else if strings.Contains(m.Content, "watch") && !strings.Contains(m.Content, "-pl") {
-				prepWatchCommand(commData, m)
+				playbackAlreadyStarted = prepWatchCommand(commData, m)
 			}
 			resetSearch() // In case a search was called prior to this
 		} else {
@@ -39,8 +40,8 @@ func queueSong(m *discordgo.MessageCreate) {
 			prepSearchQueueSelector(commData, m)
 		}
 
-		// If there's nothing playing and the queue grew
-		if v.nowPlaying == (Song{}) && len(queue) >= 1 {
+		// If there's nothing playing and the queue grew AND playback wasn't already started
+		if !playbackAlreadyStarted && v.nowPlaying == (Song{}) && len(queue) >= 1 {
 			joinVoiceChannel()
 			prepFirstSongEntered(m, false)
 		} else if !searchRequested {

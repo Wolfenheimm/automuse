@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sync"
 
 	"log"
 
@@ -25,6 +26,7 @@ var (
 	song            = Song{}
 	searchQueue     = []SongSearch{}
 	queue           = []Song{}
+	queueMutex      sync.Mutex // Mutex for thread-safe queue operations
 )
 
 // Sets up the DCA encoder options
