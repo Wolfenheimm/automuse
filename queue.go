@@ -2,7 +2,9 @@ package main
 
 import (
 	"log"
+	"os/exec"
 	"strconv"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -55,8 +57,20 @@ func queueSingleSong(m *discordgo.MessageCreate, link string) {
 	log.Printf("[DEBUG] Attempting to get video from link: %s", link)
 	video, err := client.GetVideo(link)
 	if err != nil {
-		log.Printf("[ERROR] Failed to get video: %v", err)
-		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Failed to get video information. The URL may be invalid.")
+		log.Printf("[ERROR] Failed to get video with YouTube client: %v", err)
+
+		// Check if it's an age restriction or embedding disabled error
+		if strings.Contains(err.Error(), "age restriction") || strings.Contains(err.Error(), "embedding") || strings.Contains(err.Error(), "disabled") {
+			log.Printf("[INFO] Attempting fallback with yt-dlp for restricted video")
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Video has restrictions, trying alternative method...")
+
+			// Try using yt-dlp as fallback for restricted videos
+			if queueWithYtDlp(m, link) {
+				return // Success with yt-dlp
+			}
+		}
+
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Failed to get video information. The video may be private, age-restricted, or unavailable in your region.")
 		return
 	}
 
@@ -67,6 +81,14 @@ func queueSingleSong(m *discordgo.MessageCreate, link string) {
 	url, err := getStreamURL(video.ID)
 	if err != nil {
 		log.Printf("[ERROR] Failed to get stream URL: %v", err)
+
+		// Try yt-dlp fallback if stream URL fails
+		log.Printf("[INFO] Stream URL failed, trying yt-dlp fallback")
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Stream access failed, trying alternative download method...")
+		if queueWithYtDlp(m, link) {
+			return // Success with yt-dlp
+		}
+
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Sorry, I couldn't get a working stream for this video :(")
 		return
 	}
@@ -171,4 +193,58 @@ func prepDisplayQueue(commData []string, queueLenBefore int, m *discordgo.Messag
 		nothingAddedMessage = nothingAddedMessage + "- Youtu.be links or links set at a certain time (t=#s) have not been implemented - sorry!"
 		s.ChannelMessageSend(m.ChannelID, nothingAddedMessage)
 	}
+}
+
+// queueWithYtDlp uses yt-dlp as a fallback for restricted videos
+func queueWithYtDlp(m *discordgo.MessageCreate, link string) bool {
+	// Extract video ID from the link
+	var videoID string
+	if strings.Contains(link, "youtube.com/watch?v=") {
+		parts := strings.Split(link, "v=")
+		if len(parts) > 1 {
+			videoID = strings.Split(parts[1], "&")[0]
+		}
+	} else if strings.Contains(link, "youtu.be/") {
+		parts := strings.Split(link, "youtu.be/")
+		if len(parts) > 1 {
+			videoID = strings.Split(parts[1], "?")[0]
+		}
+	}
+
+	if videoID == "" {
+		log.Printf("[ERROR] Could not extract video ID from URL: %s", link)
+		return false
+	}
+
+	log.Printf("[INFO] Using yt-dlp fallback for video ID: %s", videoID)
+
+	// Use yt-dlp to get video info
+	cmd := exec.Command("yt-dlp", "--no-download", "--print", "title", "--print", "duration", link)
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("[ERROR] yt-dlp failed to get video info: %v", err)
+		return false
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) < 2 {
+		log.Printf("[ERROR] yt-dlp returned unexpected output format")
+		return false
+	}
+
+	title := strings.TrimSpace(lines[0])
+	duration := strings.TrimSpace(lines[1])
+
+	log.Printf("[INFO] yt-dlp got video info: %s (duration: %s)", title, duration)
+
+	// For yt-dlp fallback, we'll use the download approach since streaming might not work
+	// Create the song entry with a special flag to indicate it needs yt-dlp download
+	song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, title, videoID+".mp3", duration)
+	song.VideoURL = link // Store original URL for yt-dlp processing
+	queue = append(queue, song)
+
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Adding ["+title+"] to the Queue (using fallback method) :musical_note:")
+	log.Printf("[INFO] Successfully queued restricted video using yt-dlp: %s", title)
+
+	return true
 }
