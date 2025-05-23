@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	yt "github.com/kkdai/youtube/v2"
 )
 
 // This is the main function that plays the queue
@@ -112,10 +113,11 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 	}
 }
 
-// Fetch a single video and place into song queue
-// Single video link (not a playlist)
+// queueSingleSong fetches metadata and queues a single video
 func queueSingleSong(m *discordgo.MessageCreate, link string) {
 	log.Printf("[DEBUG] Attempting to get video from link: %s", link)
+
+	// First try to get video metadata using YouTube client
 	video, err := client.GetVideo(link)
 	if err != nil {
 		log.Printf("[ERROR] Failed to get video with YouTube client: %v", err)
@@ -138,7 +140,10 @@ func queueSingleSong(m *discordgo.MessageCreate, link string) {
 	log.Printf("[DEBUG] Successfully retrieved video: %s (ID: %s)", video.Title, video.ID)
 	log.Printf("[DEBUG] Video duration: %s", video.Duration)
 
-	// Use the getStreamURL function from youtube.go which is optimized for our use case
+	// Always create song with proper metadata first
+	song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.Title, video.ID, video.Duration.String())
+
+	// Now try to get the stream URL or use cached file
 	url, err := getStreamURL(video.ID)
 	if err != nil {
 		log.Printf("[ERROR] Failed to get stream URL: %v", err)
@@ -154,8 +159,7 @@ func queueSingleSong(m *discordgo.MessageCreate, link string) {
 		return
 	}
 
-	// Fill Song Info - Make sure we set the video title correctly
-	song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.Title, video.ID+".mp3", video.Duration.String())
+	// Set the video URL (could be stream URL or link to original video for yt-dlp processing)
 	song.VideoURL = url
 
 	// Thread-safe queue append
@@ -186,7 +190,7 @@ func queuePlaylist(playlistID string, m *discordgo.MessageCreate) {
 				log.Println(err)
 			} else {
 				format := video.Formats.WithAudioChannels() // Get matches with audio channels only
-				song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.ID, video.Title, video.Duration.String())
+				song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.Title, video.ID, video.Duration.String())
 				formatList := prepSongFormat(format)
 				url, err := client.GetStreamURL(video, formatList)
 
@@ -304,7 +308,7 @@ func queueWithYtDlp(m *discordgo.MessageCreate, link string) bool {
 
 	// For yt-dlp fallback, we'll use the download approach since streaming might not work
 	// Create the song entry with a special flag to indicate it needs yt-dlp download
-	song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, title, videoID+".mp3", duration)
+	song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, title, videoID, duration)
 	song.VideoURL = link // Store original URL for yt-dlp processing
 
 	// Thread-safe queue append
@@ -381,38 +385,25 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 					videoURL := "https://www.youtube.com/watch?v=" + videoId
 					log.Printf("INFO: Background processing video %d/%d: %s", index+2, len(allVideoIds), videoId)
 
-					// Try to get video info first
-					video, err := client.GetVideo(videoURL)
+					// Get video metadata first (always, even if we have cached files)
+					title, videoID, duration, err := getVideoMetadata(videoId)
 					if err != nil {
-						log.Printf("[ERROR] Failed to get video info for %s: %v", videoId, err)
-
-						// Try yt-dlp fallback for restricted videos
-						if strings.Contains(err.Error(), "age restriction") || strings.Contains(err.Error(), "embedding") || strings.Contains(err.Error(), "disabled") {
-							log.Printf("[INFO] Trying yt-dlp fallback for restricted video: %s", videoId)
-							if queueWithYtDlpBackground(videoURL, m.ChannelID, m.Author.ID, m.ID) {
-								songsProcessed++
-								log.Printf("[INFO] Background queued via yt-dlp (%d/%d): %s", songsProcessed, len(allVideoIds), videoId)
-							}
-						}
+						log.Printf("[ERROR] Failed to get video metadata for %s: %v", videoId, err)
 						return
 					}
+
+					// Create song with proper metadata
+					song := fillSongInfo(m.ChannelID, m.Author.ID, m.ID, title, videoID, duration)
 
 					// Try to get stream URL
-					url, err := getStreamURL(video.ID)
+					url, err := getStreamURL(videoID)
 					if err != nil {
-						log.Printf("[ERROR] Failed to get stream URL for %s: %v", video.Title, err)
-
-						// Try yt-dlp fallback
-						if queueWithYtDlpBackground(videoURL, m.ChannelID, m.Author.ID, m.ID) {
-							songsProcessed++
-							log.Printf("[INFO] Background queued via yt-dlp fallback (%d/%d): %s", songsProcessed, len(allVideoIds), video.Title)
-						}
-						return
+						log.Printf("[ERROR] Failed to get stream URL for %s: %v", title, err)
+						// Store original URL for yt-dlp processing as fallback
+						song.VideoURL = videoURL
+					} else {
+						song.VideoURL = url
 					}
-
-					// Create song and add to queue safely
-					song := fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.Title, video.ID+".mp3", video.Duration.String())
-					song.VideoURL = url
 
 					// Thread-safe queue append
 					queueMutex.Lock()
@@ -421,7 +412,7 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 
 					songsProcessed++
 
-					log.Printf("[INFO] Background queued (%d/%d): %s", songsProcessed, len(allVideoIds), video.Title)
+					log.Printf("[INFO] Background queued (%d/%d): %s", songsProcessed, len(allVideoIds), title)
 
 					// Send update every 5 songs or on completion
 					if songsProcessed%5 == 0 || songsProcessed == len(allVideoIds) {
@@ -479,7 +470,7 @@ func queueWithYtDlpBackground(link, channelID, authorID, messageID string) bool 
 	log.Printf("[INFO] yt-dlp got video info: %s (duration: %s)", title, duration)
 
 	// Create the song entry
-	song := fillSongInfo(channelID, authorID, messageID, title, videoID+".mp3", duration)
+	song := fillSongInfo(channelID, authorID, messageID, title, videoID, duration)
 	song.VideoURL = link // Store original URL for yt-dlp processing
 
 	// Thread-safe queue append
@@ -489,4 +480,60 @@ func queueWithYtDlpBackground(link, channelID, authorID, messageID string) bool 
 
 	log.Printf("[INFO] Successfully queued restricted video using yt-dlp: %s", title)
 	return true
+}
+
+// getVideoMetadata fetches video metadata (title, duration) for a given video ID or URL
+func getVideoMetadata(videoIDOrURL string) (title, videoID, duration string, err error) {
+	var video *yt.Video
+
+	// Try YouTube client first
+	if strings.HasPrefix(videoIDOrURL, "http") {
+		video, err = client.GetVideo(videoIDOrURL)
+	} else {
+		video, err = client.GetVideo("https://www.youtube.com/watch?v=" + videoIDOrURL)
+	}
+
+	if err == nil {
+		return video.Title, video.ID, video.Duration.String(), nil
+	}
+
+	// If YouTube client fails, try yt-dlp for metadata only
+	log.Printf("[DEBUG] YouTube client failed for %s, trying yt-dlp: %v", videoIDOrURL, err)
+
+	var url string
+	if strings.HasPrefix(videoIDOrURL, "http") {
+		url = videoIDOrURL
+		// Extract video ID from URL
+		if strings.Contains(url, "youtube.com/watch?v=") {
+			parts := strings.Split(url, "v=")
+			if len(parts) > 1 {
+				videoID = strings.Split(parts[1], "&")[0]
+			}
+		} else if strings.Contains(url, "youtu.be/") {
+			parts := strings.Split(url, "youtu.be/")
+			if len(parts) > 1 {
+				videoID = strings.Split(parts[1], "?")[0]
+			}
+		}
+	} else {
+		videoID = videoIDOrURL
+		url = "https://www.youtube.com/watch?v=" + videoID
+	}
+
+	// Use yt-dlp to get metadata
+	cmd := exec.Command("yt-dlp", "--no-download", "--print", "title", "--print", "duration", url)
+	output, cmdErr := cmd.Output()
+	if cmdErr != nil {
+		return "", videoID, "", fmt.Errorf("both YouTube client and yt-dlp failed: %v, %v", err, cmdErr)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) < 2 {
+		return "", videoID, "", fmt.Errorf("yt-dlp returned unexpected output format")
+	}
+
+	title = strings.TrimSpace(lines[0])
+	duration = strings.TrimSpace(lines[1])
+
+	return title, videoID, duration, nil
 }
