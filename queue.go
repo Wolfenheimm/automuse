@@ -16,6 +16,51 @@ import (
 // - It will play the queue until it's empty
 // - If the queue is empty, it will leave the voice channel
 func playQueue(m *discordgo.MessageCreate, isManual bool) {
+	// Establish voice connection once for the entire queue
+	if v.voice == nil || !v.voice.Ready {
+		log.Printf("INFO: Establishing voice connection for queue playback")
+
+		// Find voice channel
+		voiceChannelID, err := v.findUserVoiceChannel()
+		if err != nil || voiceChannelID == "" {
+			log.Printf("ERROR: Failed to find a voice channel: %v", err)
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Could not find a voice channel to join!")
+			return
+		}
+
+		// Join voice channel once
+		v.voice, err = s.ChannelVoiceJoin(v.guildID, voiceChannelID, false, false)
+		if err != nil {
+			log.Printf("ERROR: Failed to join voice channel: %v", err)
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Failed to join voice channel!")
+			return
+		}
+
+		// Wait for voice connection to be ready
+		ready := false
+		for i := 0; i < 5; i++ {
+			if v.voice != nil && v.voice.Ready {
+				ready = true
+				log.Printf("INFO: Voice connection ready for queue playback")
+				break
+			}
+			log.Printf("INFO: Waiting for voice connection (attempt %d/5)", i+1)
+			time.Sleep(1 * time.Second)
+		}
+
+		if !ready {
+			log.Printf("ERROR: Voice connection failed to become ready")
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Voice connection failed!")
+			if v.voice != nil {
+				v.voice.Disconnect()
+				v.voice = nil
+			}
+			return
+		}
+
+		log.Printf("INFO: Voice connection established successfully")
+	}
+
 	// Iterate through the queue, playing each song
 	for {
 		// Thread-safe queue access
@@ -43,9 +88,9 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 		go func() {
 			// TODO: Consider removing mpeg support
 			if isManual {
-				v.DCA(v.nowPlaying.Title, isManual)
+				v.DCAWithExistingConnection(v.nowPlaying.Title, isManual)
 			} else {
-				v.DCA(v.nowPlaying.VideoURL, isManual)
+				v.DCAWithExistingConnection(v.nowPlaying.VideoURL, isManual)
 			}
 			audioComplete <- true
 		}()
@@ -94,7 +139,7 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 		}
 	}
 
-	// No more songs in the queue, reset the queue + leave channel
+	// No more songs in the queue, reset and disconnect voice
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing left to play, peace! :v:")
 	v.stop = true
 	v.nowPlaying = Song{}
@@ -103,8 +148,11 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 	queue = []Song{}
 	queueMutex.Unlock()
 
+	// Disconnect voice connection only when queue is fully complete
 	if v.voice != nil {
+		log.Printf("INFO: Queue finished, disconnecting from voice channel")
 		v.voice.Disconnect()
+		v.voice = nil
 	}
 
 	// Cleanup the encoder

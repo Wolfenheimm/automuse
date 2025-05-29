@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"encoding/binary"
 	"io"
 	"log"
 	"os"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
+	"layeh.com/gopus"
 )
 
 // Encodes the video for audio playback
@@ -494,4 +497,285 @@ func (v *VoiceInstance) playWithFFmpeg(filePath string) {
 
 	log.Printf("INFO: DCA file playback completed after %.2f seconds, sent %d frames",
 		duration.Seconds(), frameCount)
+}
+
+// DCAWithExistingConnection plays audio using the existing voice connection
+// instead of creating a new one (prevents disconnect/reconnect between songs)
+func (v *VoiceInstance) DCAWithExistingConnection(path string, isMpeg bool) {
+	log.Printf("INFO: Starting DCAWithExistingConnection function with path: %s", path)
+
+	// Log nowPlaying info which should have been set before this call
+	if v.nowPlaying.Title != "" {
+		log.Printf("INFO: Streaming audio for: %s", v.nowPlaying.Title)
+	}
+
+	var audioPath string
+	var originalURL string
+
+	// Determine audio path based on input type
+	if isMpeg {
+		// Local files in the mpegs directory
+		audioPath = "mpegs/" + path
+		log.Printf("INFO: Using local file: %s", audioPath)
+	} else if strings.HasPrefix(path, "downloads/") || strings.HasPrefix(path, "./downloads/") {
+		// Direct paths to files in the downloads directory
+		audioPath = path
+		log.Printf("INFO: Using direct file path: %s", audioPath)
+	} else if strings.HasPrefix(path, "http") {
+		// For YouTube URLs
+		log.Printf("INFO: Processing URL: %s", path)
+
+		// Extract video ID and construct original YouTube URL if needed
+		var videoID string
+		if strings.Contains(path, "youtube.com/watch?v=") {
+			parts := strings.Split(path, "v=")
+			if len(parts) > 1 {
+				videoID = strings.Split(parts[1], "&")[0]
+				originalURL = path
+			}
+		} else if strings.Contains(path, "youtu.be/") {
+			parts := strings.Split(path, "youtu.be/")
+			if len(parts) > 1 {
+				videoID = strings.Split(parts[1], "?")[0]
+				originalURL = "https://www.youtube.com/watch?v=" + videoID
+			}
+		} else if strings.Contains(path, "videoplayback") && strings.Contains(path, "id=") {
+			// Extract ID from videoplayback URL and construct original YouTube URL
+			parts := strings.Split(path, "id=")
+			if len(parts) > 1 {
+				videoID = strings.Split(parts[1], "&")[0]
+				originalURL = "https://www.youtube.com/watch?v=" + videoID
+			}
+		}
+
+		if videoID == "" {
+			log.Printf("ERROR: Could not extract video ID from URL")
+			return
+		}
+		log.Printf("INFO: Extracted video ID: %s", videoID)
+
+		// Create downloads directory if it doesn't exist
+		downloadDir := "downloads"
+		if err := os.MkdirAll(downloadDir, 0755); err != nil {
+			log.Printf("ERROR: Failed to create downloads directory: %v", err)
+			return
+		}
+
+		// Define MP3 path
+		mp3Path := filepath.Join(downloadDir, videoID+".mp3")
+
+		// Check if MP3 already exists
+		if _, err := os.Stat(mp3Path); err == nil {
+			log.Printf("INFO: Using cached MP3 file: %s", mp3Path)
+			audioPath = mp3Path
+		} else {
+			log.Printf("INFO: Downloading audio from YouTube: %s", originalURL)
+
+			// Set up environment with YouTube token
+			env := os.Environ()
+			env = append(env, "YT_TOKEN="+os.Getenv("YT_TOKEN"))
+
+			// Use yt-dlp to download audio in MP3 format
+			cmd := exec.Command("yt-dlp",
+				"--no-playlist",         // Don't download playlists
+				"-x",                    // Extract audio
+				"--audio-format", "mp3", // Convert to MP3
+				"--audio-quality", "192K", // Set quality
+				"--no-warnings", // Reduce noise in logs
+				"--progress",    // Show progress
+				"-o", mp3Path,   // Output file
+				originalURL) // Original YouTube URL
+
+			cmd.Env = env
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				log.Printf("ERROR: Failed to download audio: %v", err)
+				log.Printf("yt-dlp output: %s", string(output))
+				// Clean up partial file if it exists
+				os.Remove(mp3Path)
+				return
+			}
+
+			// Verify the MP3 file exists and has content
+			if info, err := os.Stat(mp3Path); err != nil || info.Size() == 0 {
+				log.Printf("ERROR: MP3 file is missing or empty")
+				if err == nil {
+					os.Remove(mp3Path)
+				}
+				return
+			}
+
+			log.Printf("INFO: Successfully downloaded audio to MP3: %s", mp3Path)
+			audioPath = mp3Path
+		}
+	} else {
+		log.Printf("ERROR: Unsupported path format: %s", path)
+		return
+	}
+
+	// Verify file exists and get size
+	fileInfo, err := os.Stat(audioPath)
+	if err != nil {
+		log.Printf("ERROR: Audio file does not exist or cannot be accessed: %s", audioPath)
+		return
+	}
+	log.Printf("INFO: Audio file size: %d bytes", fileInfo.Size())
+
+	// Use existing voice connection instead of creating a new one
+	if v.voice == nil || !v.voice.Ready {
+		log.Printf("ERROR: No voice connection available for playback")
+		return
+	}
+
+	// Play the MP3 file using the existing connection
+	log.Printf("INFO: Playing MP3 file using existing voice connection: %s", audioPath)
+	playMP3WithExistingConnection(v.voice, audioPath)
+}
+
+// playMP3WithExistingConnection plays an MP3 file using an existing voice connection
+// This prevents the bot from disconnecting and reconnecting between songs
+func playMP3WithExistingConnection(vc *discordgo.VoiceConnection, filePath string) {
+	log.Printf("INFO: Starting MP3 playback with existing connection: %s", filePath)
+
+	// Verify voice connection is ready
+	if vc == nil || !vc.Ready {
+		log.Printf("ERROR: Voice connection is not ready for playback")
+		return
+	}
+
+	// Start speaking
+	log.Printf("INFO: Setting speaking state to true")
+	err := vc.Speaking(true)
+	if err != nil {
+		log.Printf("ERROR: Failed to set speaking state: %v", err)
+		return
+	}
+
+	// Convert MP3 file to PCM audio using ffmpeg
+	cmd := exec.Command("ffmpeg",
+		"-hide_banner",
+		"-loglevel", "error",
+		"-i", filePath,
+		"-f", "s16le", // PCM signed 16-bit little-endian
+		"-ar", "48000", // 48KHz sampling rate
+		"-ac", "2", // 2 channels (stereo)
+		"-af", "volume=1.5", // Increase volume
+		"pipe:1")
+
+	ffmpegout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Printf("ERROR: Failed to create ffmpeg stdout pipe: %v", err)
+		vc.Speaking(false)
+		return
+	}
+
+	ffmpegbuf := bufio.NewReader(ffmpegout)
+	err = cmd.Start()
+	if err != nil {
+		log.Printf("ERROR: Failed to start ffmpeg: %v", err)
+		vc.Speaking(false)
+		return
+	}
+
+	// Create a channel to signal the end of audio playback
+	done := make(chan bool)
+
+	// Send audio to Discord in a separate goroutine
+	go func() {
+		var opusEncoder *gopus.Encoder
+		var err error
+
+		// Create Opus encoder
+		opusEncoder, err = gopus.NewEncoder(48000, 2, gopus.Audio)
+		if err != nil {
+			log.Printf("ERROR: Failed to create Opus encoder: %v", err)
+			done <- true
+			return
+		}
+
+		// Set the bitrate
+		opusEncoder.SetBitrate(128000) // 128 kbps
+
+		// Buffer for reading audio data
+		audiobuf := make([]int16, 960*2) // 960 samples * 2 channels
+
+		// Send audio data to Discord
+		for {
+			// Check if skip was called
+			if v.stop {
+				log.Printf("INFO: Skip detected during existing connection playback, stopping")
+				break
+			}
+
+			// Read audio data
+			err = binary.Read(ffmpegbuf, binary.LittleEndian, &audiobuf)
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				log.Printf("INFO: End of audio file reached")
+				break
+			}
+			if err != nil {
+				log.Printf("ERROR: Error reading from ffmpeg: %v", err)
+				break
+			}
+
+			// Encode audio to Opus
+			opus, err := opusEncoder.Encode(audiobuf, 960, 960*2*2)
+			if err != nil {
+				log.Printf("ERROR: Error encoding to Opus: %v", err)
+				break
+			}
+
+			// Send to Discord
+			vc.OpusSend <- opus
+		}
+
+		// Signal that we're done
+		done <- true
+	}()
+
+	// Set up a ticker for maintaining speaking state
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	// Main loop - wait for audio to finish or keep alive
+	for {
+		select {
+		case <-ticker.C:
+			// Check if skip was called
+			if v.stop {
+				log.Printf("INFO: Skip detected during existing connection main loop, stopping")
+				// Kill ffmpeg process
+				if cmd.Process != nil {
+					cmd.Process.Kill()
+				}
+				// Set speaking to false but DON'T disconnect
+				if vc != nil && vc.Ready {
+					vc.Speaking(false)
+				}
+				return
+			}
+
+			// Keep the speaking state alive
+			if vc != nil && vc.Ready {
+				vc.Speaking(true)
+				log.Printf("DEBUG: Refreshed speaking state for existing connection")
+			}
+		case <-done:
+			// Audio playback is complete, clean up
+			log.Printf("INFO: Audio playback completed with existing connection")
+
+			// Wait for ffmpeg to finish
+			err = cmd.Wait()
+			if err != nil {
+				log.Printf("ERROR: FFMPEG exited with error: %v", err)
+			}
+
+			// Set speaking to false but DON'T disconnect - this is the key difference
+			if vc != nil && vc.Ready {
+				vc.Speaking(false)
+			}
+
+			return
+		}
+	}
 }
