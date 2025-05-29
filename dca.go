@@ -155,7 +155,7 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool) {
 
 	// Wait for voice connection to be ready
 	ready := false
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if vc != nil && vc.Ready {
 			ready = true
 			log.Printf("INFO: Voice connection is ready after %d attempts", i+1)
@@ -295,15 +295,13 @@ func (v *VoiceInstance) DirectDCA(filePath string) {
 	// Create a goroutine to periodically update the speaking state
 	go func() {
 		for keepAlive {
-			select {
-			case <-ticker.C:
-				if v.voice != nil && v.voice.Ready {
-					// Refresh speaking state to keep connection alive
-					v.voice.Speaking(true)
-					log.Printf("DEBUG: Refreshed speaking state at %.2f seconds", time.Since(streamStartTime).Seconds())
-				} else {
-					return
-				}
+			<-ticker.C
+			if v.voice != nil && v.voice.Ready {
+				// Refresh speaking state to keep connection alive
+				v.voice.Speaking(true)
+				log.Printf("DEBUG: Refreshed speaking state at %.2f seconds", time.Since(streamStartTime).Seconds())
+			} else {
+				return
 			}
 		}
 	}()
@@ -468,15 +466,13 @@ func (v *VoiceInstance) playWithFFmpeg(filePath string) {
 	// Start keepalive goroutine
 	go func() {
 		for streamActive {
-			select {
-			case <-ticker.C:
-				if v.voice != nil && v.voice.Ready {
-					// Refresh speaking state
-					v.voice.Speaking(true)
-					log.Printf("DEBUG: DCA file playback running for %.2f seconds", time.Since(streamStartTime).Seconds())
-				} else {
-					return
-				}
+			<-ticker.C
+			if v.voice != nil && v.voice.Ready {
+				// Refresh speaking state
+				v.voice.Speaking(true)
+				log.Printf("DEBUG: DCA file playback running for %.2f seconds", time.Since(streamStartTime).Seconds())
+			} else {
+				return
 			}
 		}
 	}()
@@ -508,7 +504,6 @@ func (v *VoiceInstance) playWithFFmpeg(filePath string) {
 			time.Sleep(20 * time.Millisecond)
 		case <-time.After(1 * time.Second):
 			log.Printf("ERROR: Timeout sending opus frame to Discord")
-			break
 		}
 	}
 
@@ -784,7 +779,6 @@ func playMP3WithExistingConnection(vc *discordgo.VoiceConnection, filePath strin
 			// Keep the speaking state alive
 			if vc != nil && vc.Ready {
 				vc.Speaking(true)
-				log.Printf("DEBUG: Refreshed speaking state for existing connection")
 			}
 		case <-done:
 			// Audio playback is complete, clean up

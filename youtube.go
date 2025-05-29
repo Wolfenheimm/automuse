@@ -166,7 +166,7 @@ func getStreamURL(videoID string) (string, error) {
 		format.Itag, format.Quality, format.MimeType)
 
 	// Get the stream URL with signature
-	url, err := getStreamURLWithSignature(videoID, format)
+	url, err := getStreamURLWithSignature(format)
 	if err != nil {
 		return "", err
 	}

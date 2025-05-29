@@ -43,8 +43,6 @@ type VoiceInstance struct {
 	voice      *discordgo.VoiceConnection
 	encoder    *dca.EncodeSession
 	stream     *dca.StreamingSession
-	volume     int
-	isPaused   bool
 	nowPlaying Song
 	stop       bool
 	speaking   bool
