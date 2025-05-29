@@ -370,8 +370,8 @@ func queueWithYtDlp(m *discordgo.MessageCreate, link string) bool {
 	return true
 }
 
-// queuePlaylistThreaded processes playlists by starting the first song immediately
-// and downloading the rest in background threads
+// queuePlaylistThreaded processes playlists by downloading all songs first
+// then starting playback once everything is ready
 func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 	log.Printf("INFO: Starting threaded playlist processing for: %s", playlistID)
 
@@ -400,79 +400,107 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 	}
 
 	log.Printf("INFO: Found %d videos in playlist", len(allVideoIds))
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Found %d videos! Starting first song, processing rest in background...", len(allVideoIds)))
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Found %d videos! Processing all songs before starting playback...", len(allVideoIds)))
 
-	// Process the first video immediately to start playback
-	firstVideoURL := "https://www.youtube.com/watch?v=" + allVideoIds[0]
-	log.Printf("INFO: Processing first video immediately: %s", allVideoIds[0])
+	// Process all videos and queue them before starting playback
+	songsProcessed := 0
+	successfullyQueued := 0
 
-	// Queue the first song using the regular method
-	queueSingleSong(m, firstVideoURL)
+	// Use a semaphore to limit concurrent processing
+	maxConcurrent := 3
+	semaphore := make(chan struct{}, maxConcurrent)
 
-	// Note: Playback will be started by the main queueSong function, not here
-
-	// Process remaining videos in background if there are more than 1
-	if len(allVideoIds) > 1 {
-		remainingVideos := allVideoIds[1:]
-		log.Printf("INFO: Starting background processing for %d remaining videos", len(remainingVideos))
-
-		go func() {
-			songsProcessed := 1 // First song already processed
-
-			// Use a semaphore to limit concurrent processing
-			maxConcurrent := 3
-			semaphore := make(chan struct{}, maxConcurrent)
-
-			// Process remaining videos in parallel
-			for i, videoId := range remainingVideos {
-				semaphore <- struct{}{} // Acquire semaphore
-
-				go func(videoId string, index int) {
-					defer func() { <-semaphore }() // Release semaphore
-
-					videoURL := "https://www.youtube.com/watch?v=" + videoId
-					log.Printf("INFO: Background processing video %d/%d: %s", index+2, len(allVideoIds), videoId)
-
-					// Get video metadata first (always, even if we have cached files)
-					title, videoID, duration, err := getVideoMetadata(videoId)
-					if err != nil {
-						log.Printf("[ERROR] Failed to get video metadata for %s: %v", videoId, err)
-						return
-					}
-
-					// Create song with proper metadata
-					song := fillSongInfo(m.ChannelID, m.Author.ID, m.ID, title, videoID, duration)
-
-					// Try to get stream URL
-					url, err := getStreamURL(videoID)
-					if err != nil {
-						log.Printf("[ERROR] Failed to get stream URL for %s: %v", title, err)
-						// Store original URL for yt-dlp processing as fallback
-						song.VideoURL = videoURL
-					} else {
-						song.VideoURL = url
-					}
-
-					// Thread-safe queue append
-					queueMutex.Lock()
-					queue = append(queue, song)
-					queueMutex.Unlock()
-
-					songsProcessed++
-
-					log.Printf("[INFO] Background queued (%d/%d): %s", songsProcessed, len(allVideoIds), title)
-
-					// Send update every 5 songs or on completion
-					if songsProcessed%5 == 0 || songsProcessed == len(allVideoIds) {
-						s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Processed %d/%d songs from playlist :musical_note:", songsProcessed, len(allVideoIds)))
-					}
-
-				}(videoId, i)
-			}
-		}()
+	// Structure to hold results with their original index
+	type processResult struct {
+		index   int
+		song    Song
+		success bool
 	}
 
-	log.Printf("INFO: Threaded playlist processing initiated for %d videos", len(allVideoIds))
+	// Channel to collect results from goroutines
+	resultChan := make(chan processResult, len(allVideoIds))
+
+	// Process all videos in parallel
+	for i, videoId := range allVideoIds {
+		semaphore <- struct{}{} // Acquire semaphore
+
+		go func(videoId string, index int) {
+			defer func() { <-semaphore }() // Release semaphore
+
+			videoURL := "https://www.youtube.com/watch?v=" + videoId
+			log.Printf("INFO: Processing video %d/%d: %s", index+1, len(allVideoIds), videoId)
+
+			// Get video metadata first (always, even if we have cached files)
+			title, videoID, duration, err := getVideoMetadata(videoId)
+			if err != nil {
+				log.Printf("[ERROR] Failed to get video metadata for %s: %v", videoId, err)
+				resultChan <- processResult{index: index, success: false}
+				return
+			}
+
+			// Create song with proper metadata
+			song := fillSongInfo(m.ChannelID, m.Author.ID, m.ID, title, videoID, duration)
+
+			// Try to get stream URL
+			url, err := getStreamURL(videoID)
+			if err != nil {
+				log.Printf("[ERROR] Failed to get stream URL for %s: %v", title, err)
+				// Store original URL for yt-dlp processing as fallback
+				song.VideoURL = videoURL
+			} else {
+				song.VideoURL = url
+			}
+
+			log.Printf("[INFO] Successfully processed (%d/%d): %s", index+1, len(allVideoIds), title)
+			resultChan <- processResult{index: index, song: song, success: true}
+
+		}(videoId, i)
+	}
+
+	// Collect all results
+	results := make([]processResult, len(allVideoIds))
+	for i := 0; i < len(allVideoIds); i++ {
+		result := <-resultChan
+		results[result.index] = result
+		songsProcessed++
+
+		if result.success {
+			successfullyQueued++
+		}
+
+		// Send progress updates
+		if songsProcessed%5 == 0 || songsProcessed == len(allVideoIds) {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Processed %d/%d songs from playlist :musical_note:", songsProcessed, len(allVideoIds)))
+		}
+	}
+
+	log.Printf("INFO: Playlist processing complete. Successfully queued %d/%d songs", successfullyQueued, len(allVideoIds))
+
+	if successfullyQueued == 0 {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** No songs could be processed from the playlist. All videos may be unavailable or restricted.")
+		return
+	}
+
+	// Add successful songs to queue in original playlist order
+	queueMutex.Lock()
+	for _, result := range results {
+		if result.success {
+			queue = append(queue, result.song)
+		}
+	}
+	queueMutex.Unlock()
+
+	// Now start playback with all songs queued
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** All songs ready! Starting playlist with %d songs :musical_note:", successfullyQueued))
+
+	// Start playback if nothing is currently playing
+	if v.nowPlaying == (Song{}) && len(queue) >= 1 {
+		log.Printf("INFO: Starting playback for playlist with %d songs", len(queue))
+		joinVoiceChannel()
+		prepFirstSongEntered(m, false)
+	}
+
+	log.Printf("INFO: Threaded playlist processing completed for %d videos", len(allVideoIds))
 }
 
 // queueWithYtDlpBackground is a background-safe version that doesn't trigger playback
