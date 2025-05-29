@@ -144,9 +144,35 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool) {
 		return
 	}
 
-	// Play the MP3 file using the direct method
-	log.Printf("INFO: Playing MP3 file using direct method: %s", audioPath)
-	playMP3Direct(v.session, v.guildID, voiceChannelID, audioPath)
+	// Join voice channel
+	log.Printf("INFO: Joining voice channel: %s", voiceChannelID)
+	vc, err := v.session.ChannelVoiceJoin(v.guildID, voiceChannelID, false, false)
+	if err != nil {
+		log.Printf("ERROR: Failed to join voice channel: %v", err)
+		return
+	}
+	defer vc.Disconnect()
+
+	// Wait for voice connection to be ready
+	ready := false
+	for i := 0; i < 5; i++ {
+		if vc != nil && vc.Ready {
+			ready = true
+			log.Printf("INFO: Voice connection is ready after %d attempts", i+1)
+			break
+		}
+		log.Printf("INFO: Waiting for voice connection to be ready (attempt %d/5)", i+1)
+		time.Sleep(1 * time.Second)
+	}
+
+	if !ready {
+		log.Printf("ERROR: Voice connection failed to become ready after 5 attempts")
+		return
+	}
+
+	// Play the MP3 file using the existing connection method
+	log.Printf("INFO: Playing MP3 file using existing voice connection: %s", audioPath)
+	playMP3WithExistingConnection(vc, audioPath)
 }
 
 // Helper function to find the user's voice channel

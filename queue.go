@@ -86,7 +86,6 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 
 		// Start audio playback in a separate goroutine
 		go func() {
-			// TODO: Consider removing mpeg support
 			if isManual {
 				v.DCAWithExistingConnection(v.nowPlaying.Title, isManual)
 			} else {
@@ -501,61 +500,6 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 	}
 
 	log.Printf("INFO: Threaded playlist processing completed for %d videos", len(allVideoIds))
-}
-
-// queueWithYtDlpBackground is a background-safe version that doesn't trigger playback
-func queueWithYtDlpBackground(link, channelID, authorID, messageID string) bool {
-	// Extract video ID from the link
-	var videoID string
-	if strings.Contains(link, "youtube.com/watch?v=") {
-		parts := strings.Split(link, "v=")
-		if len(parts) > 1 {
-			videoID = strings.Split(parts[1], "&")[0]
-		}
-	} else if strings.Contains(link, "youtu.be/") {
-		parts := strings.Split(link, "youtu.be/")
-		if len(parts) > 1 {
-			videoID = strings.Split(parts[1], "?")[0]
-		}
-	}
-
-	if videoID == "" {
-		log.Printf("[ERROR] Could not extract video ID from URL: %s", link)
-		return false
-	}
-
-	log.Printf("[INFO] Using yt-dlp fallback for video ID: %s", videoID)
-
-	// Use yt-dlp to get video info
-	cmd := exec.Command("yt-dlp", "--no-download", "--print", "title", "--print", "duration", link)
-	output, err := cmd.Output()
-	if err != nil {
-		log.Printf("[ERROR] yt-dlp failed to get video info: %v", err)
-		return false
-	}
-
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(lines) < 2 {
-		log.Printf("[ERROR] yt-dlp returned unexpected output format")
-		return false
-	}
-
-	title := strings.TrimSpace(lines[0])
-	duration := strings.TrimSpace(lines[1])
-
-	log.Printf("[INFO] yt-dlp got video info: %s (duration: %s)", title, duration)
-
-	// Create the song entry
-	song := fillSongInfo(channelID, authorID, messageID, title, videoID, duration)
-	song.VideoURL = link // Store original URL for yt-dlp processing
-
-	// Thread-safe queue append
-	queueMutex.Lock()
-	queue = append(queue, song)
-	queueMutex.Unlock()
-
-	log.Printf("[INFO] Successfully queued restricted video using yt-dlp: %s", title)
-	return true
 }
 
 // getVideoMetadata fetches video metadata (title, duration) for a given video ID or URL
