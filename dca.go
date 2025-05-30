@@ -16,6 +16,7 @@ import (
 	"layeh.com/gopus"
 )
 
+// TODO: Fix the use of DCA and DCAWithExistingConnection - should be using the same method
 // Encodes the video for audio playback
 func (v *VoiceInstance) DCA(path string, isMpeg bool) {
 	log.Printf("INFO: Starting DCA function with path: %s", path)

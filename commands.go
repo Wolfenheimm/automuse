@@ -91,34 +91,78 @@ func skip(m *discordgo.MessageCreate) {
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queue is empty - There's nothing to skip!")
 		} else {
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Skipping "+v.nowPlaying.Title+" :loop:")
+
+			// Show what's playing next
+			queueMutex.Lock()
+			if len(queue) > 0 {
+				nextSong := queue[0]
+				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Next! Now playing ["+nextSong.Title+"] :notes:")
+			} else {
+				s.ChannelMessageSend(m.ChannelID, "**[Muse]** No more songs in queue after this skip.")
+			}
+			queueMutex.Unlock()
+
 			prepSkip()
 			resetSearch()
 			log.Println("Skipped " + v.nowPlaying.Title)
 		}
-	} else if strings.Contains(m.Content, "skip to ") {
+	} else if strings.Contains(m.Content, "skip to ") || (strings.HasPrefix(m.Content, "skip ") && m.Content != "skip") {
 		msgData := strings.Split(m.Content, " ")
-		// Can only accept 3 params: skip to #
-		if len(msgData) == 3 {
-			// The third parameter must be a number
-			if input, err := strconv.Atoi(msgData[2]); err == nil {
-				// Ensure input is greater than 0 and less than the length of the queue
-				if input <= len(queue) && input > 0 {
-					var tmp []Song
-					for i, value := range queue {
-						if i >= input-1 {
-							tmp = append(tmp, value)
-						}
-					}
-					s.ChannelMessageSend(m.ChannelID, "**[Muse]** Jumping to "+queue[input-1].Title+" :leftwards_arrow_with_hook: ")
-					log.Printf("Jumping to [%s]", queue[input-1])
-					queue = tmp
-					prepSkip()
-					resetSearch()
-				} else {
-					s.ChannelMessageSend(m.ChannelID, "**[Muse]** Selected input was not in queue range")
-				}
+		var targetPosition int
+		var err error
+
+		// Handle both \"skip to X\" and \"skip X\" formats
+		if strings.Contains(m.Content, "skip to ") {
+			// Can only accept 3 params: skip to #
+			if len(msgData) == 3 {
+				targetPosition, err = strconv.Atoi(msgData[2])
+			} else {
+				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Invalid format. Use 'skip to [number]' or 'skip [number]'")
+				return
+			}
+		} else {
+			// Handle \"skip X\" format
+			if len(msgData) == 2 {
+				targetPosition, err = strconv.Atoi(msgData[1])
+			} else {
+				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Invalid format. Use 'skip [number]' or 'skip to [number]'")
+				return
 			}
 		}
+
+		// Validate the number
+		if err != nil {
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Please provide a valid number for the skip position.")
+			return
+		}
+
+		// Check if target position exists in queue
+		queueMutex.Lock()
+		queueLength := len(queue)
+		queueMutex.Unlock()
+
+		if targetPosition <= 0 || targetPosition > queueLength {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Position %d doesn't exist in the queue. Queue has %d songs.", targetPosition, queueLength))
+			return
+		}
+
+		// Skip to the target position
+		queueMutex.Lock()
+		var tmp []Song
+		for i, value := range queue {
+			if i >= targetPosition-1 {
+				tmp = append(tmp, value)
+			}
+		}
+		targetSong := queue[targetPosition-1]
+		queue = tmp
+		queueMutex.Unlock()
+
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Jumping to ["+targetSong.Title+"] (position "+strconv.Itoa(targetPosition)+") :leftwards_arrow_with_hook:")
+		log.Printf("Jumping to [%s] at position %d", targetSong.Title, targetPosition)
+
+		prepSkip()
+		resetSearch()
 	}
 }
 
