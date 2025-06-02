@@ -87,9 +87,9 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 		// Start audio playback in a separate goroutine
 		go func() {
 			if isManual {
-				v.DCAWithExistingConnection(v.nowPlaying.Title, isManual)
+				v.DCA(v.nowPlaying.Title, isManual, true)
 			} else {
-				v.DCAWithExistingConnection(v.nowPlaying.VideoURL, isManual)
+				v.DCA(v.nowPlaying.VideoURL, isManual, true)
 			}
 			audioComplete <- true
 		}()

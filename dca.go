@@ -16,10 +16,9 @@ import (
 	"layeh.com/gopus"
 )
 
-// TODO: Fix the use of DCA and DCAWithExistingConnection - should be using the same method
 // Encodes the video for audio playback
-func (v *VoiceInstance) DCA(path string, isMpeg bool) {
-	log.Printf("INFO: Starting DCA function with path: %s", path)
+func (v *VoiceInstance) DCA(path string, isMpeg bool, useExistingConnection bool) {
+	log.Printf("INFO: Starting DCA function with path: %s, useExistingConnection: %t", path, useExistingConnection)
 
 	// Log nowPlaying info which should have been set before this call
 	if v.nowPlaying.Title != "" {
@@ -138,41 +137,54 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool) {
 	}
 	log.Printf("INFO: Audio file size: %d bytes", fileInfo.Size())
 
-	// Find voice channel before attempting to join
-	voiceChannelID, err := v.findUserVoiceChannel()
-	if err != nil || voiceChannelID == "" {
-		log.Printf("ERROR: Failed to find a voice channel: %v", err)
-		return
-	}
+	var vc *discordgo.VoiceConnection
 
-	// Join voice channel
-	log.Printf("INFO: Joining voice channel: %s", voiceChannelID)
-	vc, err := v.session.ChannelVoiceJoin(v.guildID, voiceChannelID, false, false)
-	if err != nil {
-		log.Printf("ERROR: Failed to join voice channel: %v", err)
-		return
-	}
-	defer vc.Disconnect()
-
-	// Wait for voice connection to be ready
-	ready := false
-	for i := range 5 {
-		if vc != nil && vc.Ready {
-			ready = true
-			log.Printf("INFO: Voice connection is ready after %d attempts", i+1)
-			break
+	if useExistingConnection {
+		// Use existing voice connection
+		if v.voice == nil || !v.voice.Ready {
+			log.Printf("ERROR: No voice connection available for playback")
+			return
 		}
-		log.Printf("INFO: Waiting for voice connection to be ready (attempt %d/5)", i+1)
-		time.Sleep(1 * time.Second)
+		vc = v.voice
+		log.Printf("INFO: Using existing voice connection")
+	} else {
+		// Create new voice connection
+		// Find voice channel before attempting to join
+		voiceChannelID, err := v.findUserVoiceChannel()
+		if err != nil || voiceChannelID == "" {
+			log.Printf("ERROR: Failed to find a voice channel: %v", err)
+			return
+		}
+
+		// Join voice channel
+		log.Printf("INFO: Joining voice channel: %s", voiceChannelID)
+		vc, err = v.session.ChannelVoiceJoin(v.guildID, voiceChannelID, false, false)
+		if err != nil {
+			log.Printf("ERROR: Failed to join voice channel: %v", err)
+			return
+		}
+		defer vc.Disconnect()
+
+		// Wait for voice connection to be ready
+		ready := false
+		for i := range 5 {
+			if vc != nil && vc.Ready {
+				ready = true
+				log.Printf("INFO: Voice connection is ready after %d attempts", i+1)
+				break
+			}
+			log.Printf("INFO: Waiting for voice connection to be ready (attempt %d/5)", i+1)
+			time.Sleep(1 * time.Second)
+		}
+
+		if !ready {
+			log.Printf("ERROR: Voice connection failed to become ready after 5 attempts")
+			return
+		}
 	}
 
-	if !ready {
-		log.Printf("ERROR: Voice connection failed to become ready after 5 attempts")
-		return
-	}
-
-	// Play the MP3 file using the existing connection method
-	log.Printf("INFO: Playing MP3 file using existing voice connection: %s", audioPath)
+	// Play the MP3 file using the voice connection
+	log.Printf("INFO: Playing MP3 file: %s", audioPath)
 	playMP3WithExistingConnection(vc, audioPath)
 }
 
@@ -519,139 +531,6 @@ func (v *VoiceInstance) playWithFFmpeg(filePath string) {
 
 	log.Printf("INFO: DCA file playback completed after %.2f seconds, sent %d frames",
 		duration.Seconds(), frameCount)
-}
-
-// DCAWithExistingConnection plays audio using the existing voice connection
-// instead of creating a new one (prevents disconnect/reconnect between songs)
-func (v *VoiceInstance) DCAWithExistingConnection(path string, isMpeg bool) {
-	log.Printf("INFO: Starting DCAWithExistingConnection function with path: %s", path)
-
-	// Log nowPlaying info which should have been set before this call
-	if v.nowPlaying.Title != "" {
-		log.Printf("INFO: Streaming audio for: %s", v.nowPlaying.Title)
-	}
-
-	var audioPath string
-	var originalURL string
-
-	// Determine audio path based on input type
-	if isMpeg {
-		// Local files in the mpegs directory
-		audioPath = "mpegs/" + path
-		log.Printf("INFO: Using local file: %s", audioPath)
-	} else if strings.HasPrefix(path, "downloads/") || strings.HasPrefix(path, "./downloads/") {
-		// Direct paths to files in the downloads directory
-		audioPath = path
-		log.Printf("INFO: Using direct file path: %s", audioPath)
-	} else if strings.HasPrefix(path, "http") {
-		// For YouTube URLs
-		log.Printf("INFO: Processing URL: %s", path)
-
-		// Extract video ID and construct original YouTube URL if needed
-		var videoID string
-		if strings.Contains(path, "youtube.com/watch?v=") {
-			parts := strings.Split(path, "v=")
-			if len(parts) > 1 {
-				videoID = strings.Split(parts[1], "&")[0]
-				originalURL = path
-			}
-		} else if strings.Contains(path, "youtu.be/") {
-			parts := strings.Split(path, "youtu.be/")
-			if len(parts) > 1 {
-				videoID = strings.Split(parts[1], "?")[0]
-				originalURL = "https://www.youtube.com/watch?v=" + videoID
-			}
-		} else if strings.Contains(path, "videoplayback") && strings.Contains(path, "id=") {
-			// Extract ID from videoplayback URL and construct original YouTube URL
-			parts := strings.Split(path, "id=")
-			if len(parts) > 1 {
-				videoID = strings.Split(parts[1], "&")[0]
-				originalURL = "https://www.youtube.com/watch?v=" + videoID
-			}
-		}
-
-		if videoID == "" {
-			log.Printf("ERROR: Could not extract video ID from URL")
-			return
-		}
-		log.Printf("INFO: Extracted video ID: %s", videoID)
-
-		// Create downloads directory if it doesn't exist
-		downloadDir := "downloads"
-		if err := os.MkdirAll(downloadDir, 0755); err != nil {
-			log.Printf("ERROR: Failed to create downloads directory: %v", err)
-			return
-		}
-
-		// Define MP3 path
-		mp3Path := filepath.Join(downloadDir, videoID+".mp3")
-
-		// Check if MP3 already exists
-		if _, err := os.Stat(mp3Path); err == nil {
-			log.Printf("INFO: Using cached MP3 file: %s", mp3Path)
-			audioPath = mp3Path
-		} else {
-			log.Printf("INFO: Downloading audio from YouTube: %s", originalURL)
-
-			// Set up environment with YouTube token
-			env := os.Environ()
-			env = append(env, "YT_TOKEN="+os.Getenv("YT_TOKEN"))
-
-			// Use yt-dlp to download audio in MP3 format
-			cmd := exec.Command("yt-dlp",
-				"--no-playlist",         // Don't download playlists
-				"-x",                    // Extract audio
-				"--audio-format", "mp3", // Convert to MP3
-				"--audio-quality", "192K", // Set quality
-				"--no-warnings", // Reduce noise in logs
-				"--progress",    // Show progress
-				"-o", mp3Path,   // Output file
-				originalURL) // Original YouTube URL
-
-			cmd.Env = env
-			output, err := cmd.CombinedOutput()
-			if err != nil {
-				log.Printf("ERROR: Failed to download audio: %v", err)
-				log.Printf("yt-dlp output: %s", string(output))
-				// Clean up partial file if it exists
-				os.Remove(mp3Path)
-				return
-			}
-
-			// Verify the MP3 file exists and has content
-			if info, err := os.Stat(mp3Path); err != nil || info.Size() == 0 {
-				log.Printf("ERROR: MP3 file is missing or empty")
-				if err == nil {
-					os.Remove(mp3Path)
-				}
-				return
-			}
-
-			log.Printf("INFO: Successfully downloaded audio to MP3: %s", mp3Path)
-			audioPath = mp3Path
-		}
-	} else {
-		log.Printf("ERROR: Unsupported path format: %s", path)
-		return
-	}
-
-	// Verify file exists and get size
-	fileInfo, err := os.Stat(audioPath)
-	if err != nil {
-		log.Printf("ERROR: Audio file does not exist or cannot be accessed: %s", audioPath)
-		return
-	}
-	log.Printf("INFO: Audio file size: %d bytes", fileInfo.Size())
-
-	// Use existing voice connection instead of creating a new one
-	if v.voice == nil || !v.voice.Ready {
-		log.Printf("ERROR: No voice connection available for playback")
-		return
-	}
-
-	// Play the MP3 file using the existing connection
-	log.Printf("INFO: Playing MP3 file using existing voice connection: %s", audioPath)
-	playMP3WithExistingConnection(v.voice, audioPath)
 }
 
 // playMP3WithExistingConnection plays an MP3 file using an existing voice connection
