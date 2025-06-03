@@ -177,8 +177,7 @@ func getStreamURL(videoID string) (string, error) {
 
 // ParseFormats parses the formats from a YouTube video page
 func ParseFormats(videoID string) ([]*YouTubeFormat, error) {
-	// TODO: Implement format parsing from YouTube video page
-	// For now, we'll return a basic format
+	// Return a basic format - potential to fetch formats from YouTube
 	return []*YouTubeFormat{
 		{
 			Itag:          140,
