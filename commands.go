@@ -236,7 +236,6 @@ func showHelp(m *discordgo.MessageCreate) {
 	helpMessage += "`play never gonna give you up`\n"
 	helpMessage += "`skip 3` - Skip to song #3 in queue\n"
 	helpMessage += "`remove 2` - Remove song #2 from queue\n\n"
-	helpMessage += ":wave: **Need help?** Use `play help` to see this menu again!"
 
 	s.ChannelMessageSend(m.ChannelID, helpMessage)
 }
