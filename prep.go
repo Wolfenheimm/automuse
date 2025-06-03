@@ -32,7 +32,6 @@ func sanitizeQueueSongInputs(m *discordgo.MessageCreate) ([]string, bool) {
 				if !playWasCalled && value == "play" {
 					tmp = append(tmp, value)
 					playWasCalled = true
-					// TODO: Validate this clause...
 				} else if playWasCalled && value != "play" {
 					tmp = append(tmp, value)
 				}
@@ -144,7 +143,7 @@ func prepWatchCommand(commData []string, m *discordgo.MessageCreate) bool {
 	return false // Regular queueing, no playback started yet
 }
 
-// Prepares the play command when a song is manually entered - TODO: perhaps manual entry should be removed...
+// Prepares the play command when a song is manually entered
 func prepFirstSongEntered(m *discordgo.MessageCreate, isManual bool) {
 	if len(queue) > 0 {
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Playing ["+queue[0].Title+"] :notes:")
