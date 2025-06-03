@@ -68,7 +68,7 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Commands
 	if m.Content != "" {
 		if m.Content == "play help" {
-			// TODO: Add Help Menu
+			go showHelp(m)
 		} else if m.Content == "play stuff" {
 			go queueStuff(m)
 		} else if m.Content == "play kudasai" {

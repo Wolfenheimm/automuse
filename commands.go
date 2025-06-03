@@ -213,3 +213,30 @@ func remove(m *discordgo.MessageCreate) {
 		s.ChannelMessageSend(m.ChannelID, msgToUser)
 	}
 }
+
+// Shows help menu with all available commands
+func showHelp(m *discordgo.MessageCreate) {
+	helpMessage := ":robot: **[Muse] HELP MENU** :robot:\n\n"
+	helpMessage += ":musical_note: **MUSIC COMMANDS** :musical_note:\n"
+	helpMessage += "`play [YouTube URL]` - Play a YouTube video or playlist\n"
+	helpMessage += "`play [search term]` - Search for and play a song\n"
+	helpMessage += "`play stuff` - Queue all local MP3 files from mpegs folder\n"
+	helpMessage += "`stop` - Stop current song and clear the queue\n"
+	helpMessage += "`skip` - Skip the current song\n"
+	helpMessage += "`skip [number]` - Skip to a specific position in queue\n"
+	helpMessage += "`skip to [number]` - Skip to a specific position in queue\n"
+	helpMessage += "`queue` - Display the current queue\n"
+	helpMessage += "`remove [number]` - Remove a song from the queue at position\n\n"
+	helpMessage += ":gear: **SUPPORTED FORMATS** :gear:\n"
+	helpMessage += "• YouTube videos: `https://www.youtube.com/watch?v=...`\n"
+	helpMessage += "• YouTube playlists: `https://www.youtube.com/playlist?list=...`\n"
+	helpMessage += "• Search terms: `play [artist] - [song title]`\n\n"
+	helpMessage += ":information_source: **EXAMPLES** :information_source:\n"
+	helpMessage += "`play https://www.youtube.com/watch?v=dQw4w9WgXcQ`\n"
+	helpMessage += "`play never gonna give you up`\n"
+	helpMessage += "`skip 3` - Skip to song #3 in queue\n"
+	helpMessage += "`remove 2` - Remove song #2 from queue\n\n"
+	helpMessage += ":wave: **Need help?** Use `play help` to see this menu again!"
+
+	s.ChannelMessageSend(m.ChannelID, helpMessage)
+}
