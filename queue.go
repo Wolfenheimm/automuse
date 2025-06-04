@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -70,9 +72,34 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 			break
 		}
 		v.nowPlaying, queue = queue[0], queue[1:]
+
+		// Check if there's a next song to pre-buffer
+		var nextSong Song
+		var hasNextSong bool
+		if len(queue) > 0 {
+			nextSong = queue[0]
+			hasNextSong = true
+		}
 		queueMutex.Unlock()
 
 		log.Printf("INFO: Starting playback of: %s", v.nowPlaying.Title)
+
+		// Pre-buffer the next song in a separate goroutine while current song plays
+		var nextSongReady chan bool
+		if hasNextSong {
+			nextSongReady = make(chan bool, 1)
+			go func(song Song) {
+				log.Printf("INFO: Pre-buffering next song: %s", song.Title)
+				// Pre-download/prepare the next song
+				success := preBufferSong(song, isManual)
+				if success {
+					log.Printf("INFO: Successfully pre-buffered: %s", song.Title)
+				} else {
+					log.Printf("WARNING: Failed to pre-buffer: %s", song.Title)
+				}
+				nextSongReady <- success
+			}(nextSong)
+		}
 
 		// Reset stop flag for this song
 		v.stop = false
@@ -117,6 +144,20 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 			}
 		}
 
+		// Wait for pre-buffering to complete if it was started
+		if hasNextSong && nextSongReady != nil {
+			select {
+			case bufferSuccess := <-nextSongReady:
+				if bufferSuccess {
+					log.Printf("INFO: Next song is ready for seamless playback")
+				} else {
+					log.Printf("WARNING: Next song pre-buffering failed, will process on-demand")
+				}
+			case <-time.After(2 * time.Second):
+				log.Printf("INFO: Pre-buffering still in progress, continuing anyway")
+			}
+		}
+
 		if skipDetected {
 			log.Printf("INFO: Skip detected, moving to next song")
 			// Give a moment for cleanup
@@ -126,7 +167,7 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 
 		// Song completed normally, show next song message if queue not empty
 		queueMutex.Lock()
-		hasNextSong := len(queue) > 0 && queue[0].Title != ""
+		hasNextSong = len(queue) > 0 && queue[0].Title != ""
 		var nextSongTitle string
 		if hasNextSong {
 			nextSongTitle = queue[0].Title
@@ -556,4 +597,127 @@ func getVideoMetadata(videoIDOrURL string) (title, videoID, duration string, err
 	duration = strings.TrimSpace(lines[1])
 
 	return title, videoID, duration, nil
+}
+
+// preBufferSong downloads and prepares a song in advance for smooth playback transitions
+func preBufferSong(song Song, isManual bool) bool {
+	log.Printf("INFO: Pre-buffering song: %s", song.Title)
+
+	var audioPath string
+	var originalURL string
+
+	// Determine audio path based on input type (similar logic to DCA function)
+	if isManual {
+		// Local files in the mpegs directory
+		audioPath = "mpegs/" + song.Title
+		log.Printf("INFO: Pre-buffering local file: %s", audioPath)
+
+		// For local files, just verify they exist
+		if _, err := os.Stat(audioPath); err != nil {
+			log.Printf("ERROR: Pre-buffer failed - local file does not exist: %s", audioPath)
+			return false
+		}
+		return true // Local files are already "buffered"
+	} else if strings.HasPrefix(song.VideoURL, "downloads/") || strings.HasPrefix(song.VideoURL, "./downloads/") {
+		// Direct paths to files in the downloads directory
+		audioPath = song.VideoURL
+		log.Printf("INFO: Pre-buffering direct file path: %s", audioPath)
+
+		// Verify file exists
+		if _, err := os.Stat(audioPath); err != nil {
+			log.Printf("ERROR: Pre-buffer failed - file does not exist: %s", audioPath)
+			return false
+		}
+		return true // File already exists
+	} else if strings.HasPrefix(song.VideoURL, "http") {
+		// For YouTube URLs, download the file if not already cached
+		log.Printf("INFO: Pre-buffering URL: %s", song.VideoURL)
+
+		// Extract video ID and construct original YouTube URL if needed
+		var videoID string
+		if strings.Contains(song.VideoURL, "youtube.com/watch?v=") {
+			parts := strings.Split(song.VideoURL, "v=")
+			if len(parts) > 1 {
+				videoID = strings.Split(parts[1], "&")[0]
+				originalURL = song.VideoURL
+			}
+		} else if strings.Contains(song.VideoURL, "youtu.be/") {
+			parts := strings.Split(song.VideoURL, "youtu.be/")
+			if len(parts) > 1 {
+				videoID = strings.Split(parts[1], "?")[0]
+				originalURL = "https://www.youtube.com/watch?v=" + videoID
+			}
+		} else if strings.Contains(song.VideoURL, "videoplayback") && strings.Contains(song.VideoURL, "id=") {
+			// Extract ID from videoplayback URL and construct original YouTube URL
+			parts := strings.Split(song.VideoURL, "id=")
+			if len(parts) > 1 {
+				videoID = strings.Split(parts[1], "&")[0]
+				originalURL = "https://www.youtube.com/watch?v=" + videoID
+			}
+		}
+
+		if videoID == "" {
+			log.Printf("ERROR: Could not extract video ID from URL for pre-buffering")
+			return false
+		}
+
+		// Create downloads directory if it doesn't exist
+		downloadDir := "downloads"
+		if err := os.MkdirAll(downloadDir, 0755); err != nil {
+			log.Printf("ERROR: Failed to create downloads directory for pre-buffering: %v", err)
+			return false
+		}
+
+		// Define MP3 path
+		mp3Path := filepath.Join(downloadDir, videoID+".mp3")
+
+		// Check if MP3 already exists
+		if _, err := os.Stat(mp3Path); err == nil {
+			log.Printf("INFO: Pre-buffer found cached file: %s", mp3Path)
+			return true // File already cached, we're good
+		}
+
+		log.Printf("INFO: Pre-buffering by downloading: %s", originalURL)
+
+		// Set up environment with YouTube token
+		env := os.Environ()
+		env = append(env, "YT_TOKEN="+os.Getenv("YT_TOKEN"))
+
+		// Use yt-dlp to download audio in MP3 format
+		cmd := exec.Command("yt-dlp",
+			"--no-playlist",         // Don't download playlists
+			"-x",                    // Extract audio
+			"--audio-format", "mp3", // Convert to MP3
+			"--audio-quality", "192K", // Set quality
+			"--no-warnings", // Reduce noise in logs
+			"--quiet",       // Even less output for pre-buffering
+			"-o", mp3Path,   // Output file
+			originalURL) // Original YouTube URL
+
+		cmd.Env = env
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Printf("ERROR: Pre-buffer download failed: %v", err)
+			log.Printf("yt-dlp output: %s", string(output))
+			// Clean up partial file if it exists
+			os.Remove(mp3Path)
+			return false
+		}
+
+		// Verify the MP3 file exists and has content
+		if info, err := os.Stat(mp3Path); err != nil || info.Size() == 0 {
+			log.Printf("ERROR: Pre-buffer resulted in missing or empty file")
+			if err == nil {
+				os.Remove(mp3Path)
+			}
+			return false
+		} else {
+			log.Printf("INFO: Successfully pre-buffered audio: %s (size: %d bytes)", mp3Path, info.Size())
+		}
+
+		return true
+	}
+
+	log.Printf("WARNING: Unsupported path format for pre-buffering: %s", song.VideoURL)
+	return false
 }
