@@ -221,7 +221,11 @@ func queueSingleSong(m *discordgo.MessageCreate, link string) {
 			}
 		}
 
-		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Failed to get video information. The video may be private, age-restricted, or unavailable in your region.")
+		youtubeErr := NewYouTubeError("Failed to get video information",
+			"Failed to get video information. The video may be private, age-restricted, or unavailable in your region.", err).
+			WithContext("video_url", link).
+			WithContext("user_id", m.Author.ID)
+		errorHandler.Handle(youtubeErr, m.ChannelID)
 		return
 	}
 
@@ -243,7 +247,12 @@ func queueSingleSong(m *discordgo.MessageCreate, link string) {
 			return // Success with yt-dlp
 		}
 
-		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Sorry, I couldn't get a working stream for this video :(")
+		audioErr := NewAudioError("Failed to get working stream",
+			"Sorry, I couldn't get a working stream for this video :(", err).
+			WithContext("video_id", video.ID).
+			WithContext("video_title", video.Title).
+			WithContext("user_id", m.Author.ID)
+		errorHandler.Handle(audioErr, m.ChannelID)
 		return
 	}
 

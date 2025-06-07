@@ -16,31 +16,60 @@ func queueSong(m *discordgo.MessageCreate) {
 	queueLenBefore := len(queue)
 	playbackAlreadyStarted := false
 
-	if commDataIsValid {
-		// Check if a youtube link is present
-		if strings.Contains(m.Content, "https://www.youtube") {
-			// Check if the link is a playlist or a simple video
-			if strings.Contains(m.Content, "list") && strings.Contains(m.Content, "-pl") || strings.Contains(m.Content, "/playlist?") {
-				prepPlaylistCommand(commData, m)
-			} else if strings.Contains(m.Content, "watch") && !strings.Contains(m.Content, "-pl") {
-				playbackAlreadyStarted = prepWatchCommand(commData, m)
-			}
-			resetSearch() // In case a search was called prior to this
-		} else {
-			// Search or queue input was sent
-			prepSearchQueueSelector(commData, m)
-		}
-
-		// If there's nothing playing and the queue grew AND playback wasn't already started
-		if !playbackAlreadyStarted && v.nowPlaying == (Song{}) && len(queue) >= 1 {
-			joinVoiceChannel()
-			prepFirstSongEntered(m, false)
-		} else if !searchRequested {
-			prepDisplayQueue(commData, queueLenBefore, m)
-		}
-
-		commDataIsValid = false
+	if !commDataIsValid {
+		err := NewValidationError("Invalid command format", nil).
+			WithContext("command", m.Content).
+			WithContext("user_id", m.Author.ID)
+		errorHandler.Handle(err, m.ChannelID)
+		return
 	}
+
+	// Check if a youtube link is present
+	if strings.Contains(m.Content, "https://www.youtube") {
+		// Check if the link is a playlist or a simple video
+		if strings.Contains(m.Content, "list") && strings.Contains(m.Content, "-pl") || strings.Contains(m.Content, "/playlist?") {
+			prepPlaylistCommand(commData, m)
+		} else if strings.Contains(m.Content, "watch") && !strings.Contains(m.Content, "-pl") {
+			playbackAlreadyStarted = prepWatchCommand(commData, m)
+		}
+		resetSearch() // In case a search was called prior to this
+	} else {
+		// Search or queue input was sent
+		prepSearchQueueSelector(commData, m)
+	}
+
+	// If there's nothing playing and the queue grew AND playback wasn't already started
+	if !playbackAlreadyStarted && v.nowPlaying == (Song{}) && len(queue) >= 1 {
+		if err := joinVoiceChannelWithError(); err != nil {
+			voiceErr := NewVoiceError("Failed to join voice channel",
+				"Could not join voice channel. Please check permissions.", err).
+				WithContext("guild_id", v.guildID).
+				WithContext("user_id", m.Author.ID)
+			errorHandler.Handle(voiceErr, m.ChannelID)
+			return
+		}
+		prepFirstSongEntered(m, false)
+	} else if !searchRequested {
+		prepDisplayQueue(commData, queueLenBefore, m)
+	}
+}
+
+// Helper function for voice channel joining with error handling
+func joinVoiceChannelWithError() error {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic in joinVoiceChannel: %v", r)
+		}
+	}()
+
+	joinVoiceChannel()
+
+	// Check if voice connection was successful
+	if v.voice == nil {
+		return NewVoiceError("Voice connection is nil after join attempt", "", nil)
+	}
+
+	return nil
 }
 
 // Hidden play command, used for testing purposes
@@ -88,24 +117,27 @@ func skip(m *discordgo.MessageCreate) {
 	// Check if skipping current song or skipping to another song
 	if m.Content == "skip" {
 		if v.nowPlaying == (Song{}) {
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Queue is empty - There's nothing to skip!")
-		} else {
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Skipping "+v.nowPlaying.Title+" :loop:")
-
-			// Show what's playing next
-			queueMutex.Lock()
-			if len(queue) > 0 {
-				nextSong := queue[0]
-				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Next! Now playing ["+nextSong.Title+"] :notes:")
-			} else {
-				s.ChannelMessageSend(m.ChannelID, "**[Muse]** No more songs in queue after this skip.")
-			}
-			queueMutex.Unlock()
-
-			prepSkip()
-			resetSearch()
-			log.Println("Skipped " + v.nowPlaying.Title)
+			err := NewQueueError("No song currently playing", "Queue is empty - There's nothing to skip!", nil).
+				WithContext("user_id", m.Author.ID)
+			errorHandler.Handle(err, m.ChannelID)
+			return
 		}
+
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Skipping "+v.nowPlaying.Title+" :loop:")
+
+		// Show what's playing next
+		queueMutex.Lock()
+		if len(queue) > 0 {
+			nextSong := queue[0]
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Next! Now playing ["+nextSong.Title+"] :notes:")
+		} else {
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** No more songs in queue after this skip.")
+		}
+		queueMutex.Unlock()
+
+		prepSkip()
+		resetSearch()
+		log.Println("Skipped " + v.nowPlaying.Title)
 	} else if strings.Contains(m.Content, "skip to ") || (strings.HasPrefix(m.Content, "skip ") && m.Content != "skip") {
 		msgData := strings.Split(m.Content, " ")
 		var targetPosition int
@@ -114,25 +146,32 @@ func skip(m *discordgo.MessageCreate) {
 		// Handle both \"skip to X\" and \"skip X\" formats
 		if strings.Contains(m.Content, "skip to ") {
 			// Can only accept 3 params: skip to #
-			if len(msgData) == 3 {
-				targetPosition, err = strconv.Atoi(msgData[2])
-			} else {
-				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Invalid format. Use 'skip to [number]' or 'skip [number]'")
+			if len(msgData) != 3 {
+				validationErr := NewValidationError("Invalid format. Use 'skip to [number]' or 'skip [number]'", nil).
+					WithContext("command", m.Content).
+					WithContext("user_id", m.Author.ID)
+				errorHandler.Handle(validationErr, m.ChannelID)
 				return
 			}
+			targetPosition, err = strconv.Atoi(msgData[2])
 		} else {
 			// Handle \"skip X\" format
-			if len(msgData) == 2 {
-				targetPosition, err = strconv.Atoi(msgData[1])
-			} else {
-				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Invalid format. Use 'skip [number]' or 'skip to [number]'")
+			if len(msgData) != 2 {
+				validationErr := NewValidationError("Invalid format. Use 'skip [number]' or 'skip to [number]'", nil).
+					WithContext("command", m.Content).
+					WithContext("user_id", m.Author.ID)
+				errorHandler.Handle(validationErr, m.ChannelID)
 				return
 			}
+			targetPosition, err = strconv.Atoi(msgData[1])
 		}
 
 		// Validate the number
 		if err != nil {
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Please provide a valid number for the skip position.")
+			validationErr := NewValidationError("Please provide a valid number for the skip position.", err).
+				WithContext("command", m.Content).
+				WithContext("user_id", m.Author.ID)
+			errorHandler.Handle(validationErr, m.ChannelID)
 			return
 		}
 
@@ -142,7 +181,12 @@ func skip(m *discordgo.MessageCreate) {
 		queueMutex.Unlock()
 
 		if targetPosition <= 0 || targetPosition > queueLength {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Position %d doesn't exist in the queue. Queue has %d songs.", targetPosition, queueLength))
+			queueErr := NewQueueError("Invalid queue position",
+				fmt.Sprintf("Position %d doesn't exist in the queue. Queue has %d songs.", targetPosition, queueLength), nil).
+				WithContext("target_position", targetPosition).
+				WithContext("queue_length", queueLength).
+				WithContext("user_id", m.Author.ID)
+			errorHandler.Handle(queueErr, m.ChannelID)
 			return
 		}
 

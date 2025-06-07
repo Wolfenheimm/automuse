@@ -11,6 +11,9 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
+// Global error handler
+var errorHandler *ErrorHandler
+
 // Initialize Discord & Setup Youtube
 func init() {
 	var err error
@@ -20,6 +23,9 @@ func init() {
 	if err != nil {
 		log.Fatalf("Invalid bot parameters: %v", err)
 	}
+
+	// Initialize error handler
+	errorHandler = NewErrorHandler(s)
 
 	service, err = youtube.NewService(ctx, option.WithAPIKey(youtubeToken))
 	if err != nil {
@@ -63,7 +69,10 @@ func (p *PlayHelpCommand) CanHandle(content string) bool {
 	return content == "play help"
 }
 func (p *PlayHelpCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
-	go showHelp(m)
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		showHelp(m)
+	}()
 	return nil
 }
 
@@ -73,7 +82,10 @@ func (p *PlayStuffCommand) CanHandle(content string) bool {
 	return content == "play stuff"
 }
 func (p *PlayStuffCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
-	go queueStuff(m)
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		queueStuff(m)
+	}()
 	return nil
 }
 
@@ -83,7 +95,10 @@ func (p *PlayKudasaiCommand) CanHandle(content string) bool {
 	return content == "play kudasai"
 }
 func (p *PlayKudasaiCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
-	go queueKudasai(m)
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		queueKudasai(m)
+	}()
 	return nil
 }
 
@@ -93,7 +108,17 @@ func (p *PlayCommand) CanHandle(content string) bool {
 	return strings.Contains(content, "play") && content != "play help" && content != "play stuff" && content != "play kudasai"
 }
 func (p *PlayCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
-	go queueSong(m)
+	// Validate input before processing
+	if len(strings.TrimSpace(m.Content)) < 5 { // "play" + space + at least 1 char
+		return NewValidationError("Play command requires additional parameters", nil).
+			WithContext("command", m.Content).
+			WithContext("user_id", m.Author.ID)
+	}
+
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		queueSong(m)
+	}()
 	return nil
 }
 
@@ -103,7 +128,10 @@ func (s *StopCommand) CanHandle(content string) bool {
 	return content == "stop"
 }
 func (s *StopCommand) Handle(sess *discordgo.Session, m *discordgo.MessageCreate) error {
-	go stop(m)
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		stop(m)
+	}()
 	return nil
 }
 
@@ -113,7 +141,10 @@ func (s *SkipCommand) CanHandle(content string) bool {
 	return strings.Contains(content, "skip")
 }
 func (s *SkipCommand) Handle(sess *discordgo.Session, m *discordgo.MessageCreate) error {
-	go skip(m)
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		skip(m)
+	}()
 	return nil
 }
 
@@ -123,7 +154,10 @@ func (q *QueueCommand) CanHandle(content string) bool {
 	return content == "queue"
 }
 func (q *QueueCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
-	go displayQueue(m)
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		displayQueue(m)
+	}()
 	return nil
 }
 
@@ -133,7 +167,18 @@ func (r *RemoveCommand) CanHandle(content string) bool {
 	return strings.Contains(content, "remove")
 }
 func (r *RemoveCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
-	go remove(m)
+	// Validate remove command format
+	parts := strings.Fields(m.Content)
+	if len(parts) != 2 {
+		return NewValidationError("Remove command requires a position number", nil).
+			WithContext("command", m.Content).
+			WithContext("user_id", m.Author.ID)
+	}
+
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		remove(m)
+	}()
 	return nil
 }
 
@@ -165,8 +210,8 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 	for _, handler := range commandHandlers {
 		if handler.CanHandle(m.Content) {
 			if err := handler.Handle(s, m); err != nil {
-				log.Printf("ERROR: Command handling failed: %v", err)
-				s.ChannelMessageSend(m.ChannelID, "**[Muse]** Command failed. Please try again.")
+				// Use structured error handling
+				errorHandler.Handle(err, m.ChannelID)
 			}
 			return
 		}
