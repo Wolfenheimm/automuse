@@ -81,7 +81,13 @@ func getSearch(m *discordgo.MessageCreate) {
 	index := 1
 
 	for id, name := range results {
-		searchList = searchList + " " + strconv.Itoa(index) + ". " + name + "\n"
+		// Check if this song is cached
+		cachedIndicator := ""
+		if metadataManager.HasSong(id) {
+			cachedIndicator = " :recycle:"
+		}
+
+		searchList = searchList + " " + strconv.Itoa(index) + ". " + name + cachedIndicator + "\n"
 		index = index + 1
 		searchQueue = append(searchQueue, SongSearch{id, name})
 	}

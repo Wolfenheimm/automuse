@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -270,7 +271,8 @@ func showHelp(m *discordgo.MessageCreate) {
 	helpMessage += "`skip [number]` - Skip to a specific position in queue\n"
 	helpMessage += "`skip to [number]` - Skip to a specific position in queue\n"
 	helpMessage += "`queue` - Display the current queue\n"
-	helpMessage += "`remove [number]` - Remove a song from the queue at position\n\n"
+	helpMessage += "`remove [number]` - Remove a song from the queue at position\n"
+	helpMessage += "`cache` - Show cache statistics and information\n\n"
 	helpMessage += ":gear: **SUPPORTED FORMATS** :gear:\n"
 	helpMessage += "• YouTube videos: `https://www.youtube.com/watch?v=...`\n"
 	helpMessage += "• YouTube playlists: `https://www.youtube.com/playlist?list=...`\n"
@@ -282,4 +284,26 @@ func showHelp(m *discordgo.MessageCreate) {
 	helpMessage += "`remove 2` - Remove song #2 from queue\n\n"
 
 	s.ChannelMessageSend(m.ChannelID, helpMessage)
+}
+
+// Shows cache statistics and information
+func showCache(m *discordgo.MessageCreate) {
+	stats := metadataManager.GetStats()
+
+	cacheMessage := ":floppy_disk: **[Muse] CACHE STATISTICS** :floppy_disk:\n\n"
+	cacheMessage += fmt.Sprintf(":musical_note: **Total Songs Cached:** %d\n", stats["total_songs"])
+	cacheMessage += fmt.Sprintf(":package: **Total Size:** %d MB\n", stats["total_size_mb"])
+	cacheMessage += fmt.Sprintf(":crown: **Most Used Count:** %d plays\n", stats["highest_use"])
+
+	if oldestDownload, ok := stats["oldest_download"].(time.Time); ok && stats["total_songs"].(int) > 0 {
+		cacheMessage += fmt.Sprintf(":calendar: **Oldest Download:** %s\n", oldestDownload.Format("2006-01-02 15:04"))
+	}
+
+	cacheMessage += "\n:recycle: **Cache Benefits:**\n"
+	cacheMessage += "• Instant playback for cached songs\n"
+	cacheMessage += "• Duplicate detection prevents redundant downloads\n"
+	cacheMessage += "• Usage tracking shows popular songs\n"
+	cacheMessage += "• Automatic cleanup of missing files\n"
+
+	s.ChannelMessageSend(m.ChannelID, cacheMessage)
 }

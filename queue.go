@@ -205,6 +205,45 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 func queueSingleSong(m *discordgo.MessageCreate, link string) {
 	log.Printf("[DEBUG] Attempting to get video from link: %s", link)
 
+	// Extract video ID first for cache checking
+	var videoID string
+	if strings.Contains(link, "youtube.com/watch?v=") {
+		parts := strings.Split(link, "v=")
+		if len(parts) > 1 {
+			videoID = strings.Split(parts[1], "&")[0]
+		}
+	} else if strings.Contains(link, "youtu.be/") {
+		parts := strings.Split(link, "youtu.be/")
+		if len(parts) > 1 {
+			videoID = strings.Split(parts[1], "?")[0]
+		}
+	}
+
+	// Check if song is already cached
+	if videoID != "" {
+		if cachedMetadata, exists := metadataManager.GetSong(videoID); exists {
+			log.Printf("[INFO] Found cached song: %s", cachedMetadata.Title)
+
+			// Check for similar songs with duplicate detection
+			similarSongs := metadataManager.FindSimilarSongs(cachedMetadata.Title, 0.8)
+			if len(similarSongs) > 1 {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Found %d similar songs in cache, using: [%s] :recycle:", len(similarSongs), cachedMetadata.Title))
+			}
+
+			// Create song with cached data
+			song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, cachedMetadata.Title, cachedMetadata.VideoID, cachedMetadata.Duration)
+			song.VideoURL = cachedMetadata.FilePath
+
+			// Thread-safe queue append
+			queueMutex.Lock()
+			queue = append(queue, song)
+			queueMutex.Unlock()
+
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Adding cached ["+cachedMetadata.Title+"] to the Queue  :musical_note:")
+			return
+		}
+	}
+
 	// First try to get video metadata using YouTube client
 	video, err := client.GetVideo(link)
 	if err != nil {
@@ -231,6 +270,24 @@ func queueSingleSong(m *discordgo.MessageCreate, link string) {
 
 	log.Printf("[DEBUG] Successfully retrieved video: %s (ID: %s)", video.Title, video.ID)
 	log.Printf("[DEBUG] Video duration: %s", video.Duration)
+
+	// Check for similar songs in cache before downloading
+	similarSongs := metadataManager.FindSimilarSongs(video.Title, 0.8)
+	if len(similarSongs) > 0 {
+		log.Printf("[INFO] Found %d similar songs in cache for: %s", len(similarSongs), video.Title)
+
+		// Show user the similar songs found
+		similarTitles := make([]string, len(similarSongs))
+		for i, similar := range similarSongs {
+			similarTitles[i] = similar.Title
+		}
+
+		if len(similarTitles) == 1 {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** :warning: Found similar song in cache: [%s]. Adding new version anyway.", similarTitles[0]))
+		} else {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** :warning: Found %d similar songs in cache. Adding new version anyway.", len(similarTitles)))
+		}
+	}
 
 	// Always create song with proper metadata first
 	song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, video.Title, video.ID, video.Duration.String())
@@ -313,7 +370,33 @@ func queuePlaylist(playlistID string, m *discordgo.MessageCreate) {
 // Plays the chosen song from a list provided by the search function
 func playFromSearch(input int, m *discordgo.MessageCreate) {
 	if input <= len(searchQueue) && input > 0 {
-		queueSingleSong(m, searchQueue[input-1].Id)
+		selectedSong := searchQueue[input-1]
+		videoURL := "https://www.youtube.com/watch?v=" + selectedSong.Id
+
+		// Check if this song is already cached before downloading
+		if cachedMetadata, exists := metadataManager.GetSong(selectedSong.Id); exists {
+			log.Printf("[INFO] Found cached song from search selection: %s", cachedMetadata.Title)
+
+			// Check for similar songs with duplicate detection
+			similarSongs := metadataManager.FindSimilarSongs(cachedMetadata.Title, 0.8)
+			if len(similarSongs) > 1 {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Found %d similar songs in cache, using: [%s] :recycle:", len(similarSongs), cachedMetadata.Title))
+			}
+
+			// Create song with cached data
+			song = fillSongInfo(m.ChannelID, m.Author.ID, m.ID, cachedMetadata.Title, cachedMetadata.VideoID, cachedMetadata.Duration)
+			song.VideoURL = cachedMetadata.FilePath
+
+			// Thread-safe queue append
+			queueMutex.Lock()
+			queue = append(queue, song)
+			queueMutex.Unlock()
+
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Adding cached ["+cachedMetadata.Title+"] from search to the Queue  :musical_note:")
+		} else {
+			// Not cached, proceed with normal download and queue
+			queueSingleSong(m, videoURL)
+		}
 	} else {
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** The value you entered was outside the range of the search...")
 	}
@@ -612,6 +695,17 @@ func getVideoMetadata(videoIDOrURL string) (title, videoID, duration string, err
 func preBufferSong(song Song, isManual bool) bool {
 	log.Printf("INFO: Pre-buffering song: %s", song.Title)
 
+	// Check metadata manager first
+	if metadata, exists := metadataManager.GetSong(song.VidID); exists {
+		log.Printf("INFO: Pre-buffer found cached file: %s", metadata.FilePath)
+		if _, err := os.Stat(metadata.FilePath); err == nil {
+			return true // File already cached and exists
+		} else {
+			log.Printf("WARN: Cached file missing, removing from metadata: %s", metadata.FilePath)
+			metadataManager.RemoveSong(song.VidID)
+		}
+	}
+
 	var audioPath string
 	var originalURL string
 
@@ -722,6 +816,11 @@ func preBufferSong(song Song, isManual bool) bool {
 			return false
 		} else {
 			log.Printf("INFO: Successfully pre-buffered audio: %s (size: %d bytes)", mp3Path, info.Size())
+
+			// Add to metadata manager
+			if err := metadataManager.AddSong(videoID, song.Title, song.Duration, mp3Path, info.Size()); err != nil {
+				log.Printf("WARN: Failed to add pre-buffered song to metadata: %v", err)
+			}
 		}
 
 		return true

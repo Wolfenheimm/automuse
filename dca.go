@@ -80,10 +80,13 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool, useExistingConnection bool
 		// Define MP3 path
 		mp3Path := filepath.Join(downloadDir, videoID+".mp3")
 
-		// Check if MP3 already exists
-		if _, err := os.Stat(mp3Path); err == nil {
-			log.Printf("INFO: Using cached MP3 file: %s", mp3Path)
-			audioPath = mp3Path
+		// Check metadata manager first for cached file
+		if metadata, exists := metadataManager.GetSong(videoID); exists {
+			log.Printf("INFO: Using cached MP3 file from metadata: %s", metadata.FilePath)
+			audioPath = metadata.FilePath
+
+			// Update usage statistics
+			metadataManager.AddSong(videoID, metadata.Title, metadata.Duration, metadata.FilePath, metadata.FileSize)
 		} else {
 			log.Printf("INFO: Downloading audio from YouTube: %s", originalURL)
 
@@ -123,6 +126,15 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool, useExistingConnection bool
 
 			log.Printf("INFO: Successfully downloaded audio to MP3: %s", mp3Path)
 			audioPath = mp3Path
+
+			// Add to metadata manager for future caching
+			if v.nowPlaying.Title != "" && v.nowPlaying.Duration != "" {
+				if fileInfo, statErr := os.Stat(mp3Path); statErr == nil {
+					if err := metadataManager.AddSong(videoID, v.nowPlaying.Title, v.nowPlaying.Duration, mp3Path, fileInfo.Size()); err != nil {
+						log.Printf("WARN: Failed to add song to metadata: %v", err)
+					}
+				}
+			}
 		}
 	} else {
 		log.Printf("ERROR: Unsupported path format: %s", path)

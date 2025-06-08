@@ -7,6 +7,7 @@ require (
 	github.com/jonas747/dca v0.0.0-20210930103944-155f5e5f0cc7
 	github.com/kkdai/youtube/v2 v2.10.2
 	google.golang.org/api v0.214.0
+	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32
 )
 
 require (
@@ -39,5 +40,4 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241209162323-e6fa225c2576 // indirect
 	google.golang.org/grpc v1.67.1 // indirect
 	google.golang.org/protobuf v1.35.2 // indirect
-	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32 // indirect
 )

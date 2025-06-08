@@ -32,6 +32,14 @@ func init() {
 		log.Fatalf("Error creating new YouTube client: %v", err)
 	}
 
+	// Initialize metadata manager
+	metadataManager = NewMetadataManager("downloads/metadata.json")
+
+	// Cleanup any missing files on startup
+	if err := metadataManager.CleanupMissing(); err != nil {
+		log.Printf("WARN: Failed to cleanup missing files: %v", err)
+	}
+
 	v.stop = true // Used to check if the bot is in channel playing music.
 	searchRequested = false
 }
@@ -182,6 +190,19 @@ func (r *RemoveCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate)
 	return nil
 }
 
+type CacheCommand struct{}
+
+func (c *CacheCommand) CanHandle(content string) bool {
+	return content == "cache"
+}
+func (c *CacheCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		showCache(m)
+	}()
+	return nil
+}
+
 var commandHandlers = []CommandHandler{
 	&PlayHelpCommand{}, // Check specific play commands first
 	&PlayStuffCommand{},
@@ -191,6 +212,7 @@ var commandHandlers = []CommandHandler{
 	&SkipCommand{},
 	&QueueCommand{},
 	&RemoveCommand{},
+	&CacheCommand{},
 }
 
 func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
