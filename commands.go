@@ -104,6 +104,9 @@ func stop(m *discordgo.MessageCreate) {
 	queue = []Song{}
 	resetSearch()
 
+	// Stop buffer manager
+	bufferManager.StopBuffering()
+
 	if v.encoder != nil {
 		v.encoder.Cleanup()
 	}

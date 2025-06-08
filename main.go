@@ -35,6 +35,9 @@ func init() {
 	// Initialize metadata manager
 	metadataManager = NewMetadataManager("downloads/metadata.json")
 
+	// Initialize buffer manager with 3-song buffer
+	bufferManager = NewBufferManager(3)
+
 	// Cleanup any missing files on startup
 	if err := metadataManager.CleanupMissing(); err != nil {
 		log.Printf("WARN: Failed to cleanup missing files: %v", err)

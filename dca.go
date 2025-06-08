@@ -87,6 +87,16 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool, useExistingConnection bool
 
 			// Update usage statistics
 			metadataManager.AddSong(videoID, metadata.Title, metadata.Duration, metadata.FilePath, metadata.FileSize)
+		} else if _, err := os.Stat(mp3Path); err == nil {
+			// File exists but not in metadata, add it
+			log.Printf("INFO: Found existing MP3 file, adding to metadata: %s", mp3Path)
+			audioPath = mp3Path
+
+			if v.nowPlaying.Title != "" && v.nowPlaying.Duration != "" {
+				if fileInfo, statErr := os.Stat(mp3Path); statErr == nil {
+					metadataManager.AddSong(videoID, v.nowPlaying.Title, v.nowPlaying.Duration, mp3Path, fileInfo.Size())
+				}
+			}
 		} else {
 			log.Printf("INFO: Downloading audio from YouTube: %s", originalURL)
 

@@ -18,6 +18,20 @@ import (
 // - It will play the queue until it's empty
 // - If the queue is empty, it will leave the voice channel
 func playQueue(m *discordgo.MessageCreate, isManual bool) {
+	// Pre-download first 3 songs before starting playback
+	queueMutex.Lock()
+	initialQueue := make([]Song, len(queue))
+	copy(initialQueue, queue)
+	queueMutex.Unlock()
+
+	if len(initialQueue) > 0 && !isManual {
+		log.Printf("INFO: Pre-downloading initial songs before playback")
+		err := bufferManager.PreDownloadInitialSongs(initialQueue, s, m.ChannelID)
+		if err != nil {
+			log.Printf("ERROR: Failed to pre-download songs: %v", err)
+		}
+	}
+
 	// Establish voice connection once for the entire queue
 	if v.voice == nil || !v.voice.Ready {
 		log.Printf("INFO: Establishing voice connection for queue playback")
@@ -63,7 +77,11 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 		log.Printf("INFO: Voice connection established successfully")
 	}
 
+	// Start the buffer manager for ongoing downloads
+	bufferManager.StartBuffering(s, m.ChannelID)
+
 	// Iterate through the queue, playing each song
+	currentPlayingIndex := 0
 	for {
 		// Thread-safe queue access
 		queueMutex.Lock()
@@ -73,33 +91,17 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 		}
 		v.nowPlaying, queue = queue[0], queue[1:]
 
-		// Check if there's a next song to pre-buffer
-		var nextSong Song
+		// Update buffer manager with current queue state
+		bufferManager.UpdateQueue(queue, currentPlayingIndex)
+
+		// Check if there's a next song for messaging
 		var hasNextSong bool
 		if len(queue) > 0 {
-			nextSong = queue[0]
 			hasNextSong = true
 		}
 		queueMutex.Unlock()
 
 		log.Printf("INFO: Starting playback of: %s", v.nowPlaying.Title)
-
-		// Pre-buffer the next song in a separate goroutine while current song plays
-		var nextSongReady chan bool
-		if hasNextSong {
-			nextSongReady = make(chan bool, 1)
-			go func(song Song) {
-				log.Printf("INFO: Pre-buffering next song: %s", song.Title)
-				// Pre-download/prepare the next song
-				success := preBufferSong(song, isManual)
-				if success {
-					log.Printf("INFO: Successfully pre-buffered: %s", song.Title)
-				} else {
-					log.Printf("WARNING: Failed to pre-buffer: %s", song.Title)
-				}
-				nextSongReady <- success
-			}(nextSong)
-		}
 
 		// Reset stop flag for this song
 		v.stop = false
@@ -144,20 +146,6 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 			}
 		}
 
-		// Wait for pre-buffering to complete if it was started
-		if hasNextSong && nextSongReady != nil {
-			select {
-			case bufferSuccess := <-nextSongReady:
-				if bufferSuccess {
-					log.Printf("INFO: Next song is ready for seamless playback")
-				} else {
-					log.Printf("WARNING: Next song pre-buffering failed, will process on-demand")
-				}
-			case <-time.After(2 * time.Second):
-				log.Printf("INFO: Pre-buffering still in progress, continuing anyway")
-			}
-		}
-
 		if skipDetected {
 			log.Printf("INFO: Skip detected, moving to next song")
 			// Give a moment for cleanup
@@ -187,6 +175,9 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 	queueMutex.Lock()
 	queue = []Song{}
 	queueMutex.Unlock()
+
+	// Stop the buffer manager
+	bufferManager.StopBuffering()
 
 	// Disconnect voice connection only when queue is fully complete
 	if v.voice != nil {
