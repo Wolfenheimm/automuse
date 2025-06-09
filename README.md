@@ -15,12 +15,14 @@ _A high-performance Discord music bot written in Go with advanced YouTube integr
 
 - 🎵 **YouTube Integration** - Play individual videos and entire playlists
 - 🚀 **High Performance** - Built in Go for optimal speed and memory usage
-- 🔊 **Quality Audio** - Advanced DCA encoding for crystal-clear Discord streaming
-- 📋 **Smart Queue Management** - Efficient playlist processing and queue controls
+- 🔊 **Premium Audio Quality** - 256kbps audio with advanced DCA encoding
+- 📋 **Advanced Queue Management** - Move, shuffle, and organize your music queue
 - 🔍 **YouTube Search** - Find and play music without leaving Discord
-- 💾 **Intelligent Caching** - Stores downloaded audio for instant replays
-- ⚡ **Low Latency** - Optimized voice channel handling and audio processing
-- 🎛️ **Skip Controls** - Skip to any position in the queue with ease
+- 💾 **Intelligent Caching** - Smart metadata management with automatic cleanup
+- ⚡ **Instant Skip Performance** - 5-song pre-download buffer for zero-latency skipping
+- 🎛️ **Comprehensive Controls** - Skip, move, shuffle, and manage your music experience
+- 📊 **Cache Analytics** - Track usage statistics and manage storage efficiently
+- 🔄 **Parallel Processing** - 4x concurrent downloads for faster playlist loading
 
 ## 🖥️ Platform Support
 
@@ -179,6 +181,8 @@ go build -o automuse
 
 ## 🎮 Commands
 
+### Core Playback Commands
+
 | Command            | Description                   | Example                                |
 | ------------------ | ----------------------------- | -------------------------------------- |
 | `play [URL]`       | Play a YouTube video          | `play https://youtube.com/watch?v=...` |
@@ -187,9 +191,24 @@ go build -o automuse
 | `skip`             | Skip current song             | `skip`                                 |
 | `skip [number]`    | Skip to specific position     | `skip 5`                               |
 | `skip to [number]` | Alternative skip syntax       | `skip to 5`                            |
-| `queue`            | Show current queue            | `queue`                                |
 | `stop`             | Stop playback and clear queue | `stop`                                 |
-| `remove [number]`  | Remove song from queue        | `remove 3`                             |
+
+### Queue Management Commands
+
+| Command            | Description                 | Example    |
+| ------------------ | --------------------------- | ---------- |
+| `queue`            | Show current queue          | `queue`    |
+| `remove [number]`  | Remove song from queue      | `remove 3` |
+| `move [from] [to]` | Move song between positions | `move 2 5` |
+| `shuffle`          | Shuffle the current queue   | `shuffle`  |
+
+### Cache & Performance Commands
+
+| Command         | Description                      | Example         |
+| --------------- | -------------------------------- | --------------- |
+| `cache`         | Show detailed cache statistics   | `cache`         |
+| `cache-clear`   | Clear old cached songs (7+ days) | `cache-clear`   |
+| `buffer-status` | Show buffer manager status       | `buffer-status` |
 
 ### Playlist Support
 
@@ -199,6 +218,35 @@ play https://youtube.com/playlist?list=...
 
 # The bot will process all songs and start playback once ready
 ```
+
+## 🚀 Advanced Features
+
+### Smart Caching System
+
+AutoMuse features an intelligent caching system that:
+
+- **Prevents Duplicate Downloads**: Detects similar song titles to avoid redundant downloads
+- **Metadata Management**: Stores detailed song information including play counts and timestamps
+- **Automatic Cleanup**: Removes old cached files to prevent disk space issues
+- **Usage Analytics**: Tracks most played songs and provides detailed statistics
+
+### Pre-Download Buffer
+
+The buffer system ensures smooth playback by:
+
+- **5-Song Lookahead**: Pre-downloads the next 5 songs in the queue
+- **Instant Skipping**: Skip to pre-downloaded songs with zero latency
+- **Background Downloads**: Maintains buffer automatically during playback
+- **Parallel Processing**: Downloads up to 4 songs simultaneously
+
+### Queue Management
+
+Advanced queue controls include:
+
+- **Position Moving**: Reorganize queue by moving songs between positions
+- **Shuffle Mode**: Randomize your queue for variety
+- **Smart Removal**: Remove specific songs by position number
+- **Real-time Updates**: All changes reflect immediately during playback
 
 ## 🏗️ Architecture
 
@@ -210,10 +258,12 @@ YouTube URL → yt-dlp → MP3 Cache → FFmpeg → Opus Encoding → Discord
 
 ### Key Components
 
-- **Queue Manager**: Thread-safe playlist and queue handling
-- **Audio Cache**: Local MP3 storage for faster repeated playback
+- **Queue Manager**: Thread-safe playlist and queue handling with move/shuffle support
+- **Buffer Manager**: Pre-downloads next 5 songs for instant skipping
+- **Smart Cache System**: Metadata-driven MP3 storage with automatic cleanup
 - **Voice Manager**: Persistent voice connections between songs
 - **Search Engine**: YouTube API integration for music discovery
+- **Performance Analytics**: Usage tracking and cache statistics
 
 ## 🔧 Configuration
 
@@ -221,16 +271,19 @@ YouTube URL → yt-dlp → MP3 Cache → FFmpeg → Opus Encoding → Discord
 
 The bot automatically optimizes audio quality:
 
-- **Bitrate**: 128kbps (optimal for Discord)
+- **Download Quality**: 256kbps MP3 (premium quality)
+- **Streaming Bitrate**: 128kbps Opus (optimal for Discord)
 - **Sample Rate**: 48kHz
 - **Channels**: Stereo (2 channels)
 - **Format**: Opus (Discord native)
 
-### Performance Tuning
+### Performance Optimizations
 
-- **Concurrent Processing**: 3 parallel downloads for playlists
-- **Buffer Size**: 17,000 frames for stable playback
-- **Voice Timeout**: 5-second connection retry limit
+- **Concurrent Downloads**: 4 parallel downloads for faster playlist processing
+- **Pre-Download Buffer**: 5-song lookahead for instant skipping
+- **Smart Caching**: Metadata-driven duplicate detection and storage management
+- **DCA Buffer Size**: 17,000 frames for stable playback
+- **Auto Cache Cleanup**: Removes songs older than 7 days to save disk space
 
 ## 🐛 Troubleshooting
 
