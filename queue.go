@@ -418,20 +418,40 @@ func playFromQueue(input int, m *discordgo.MessageCreate) {
 
 // Prepares queue display
 func prepDisplayQueue(commData []string, queueLenBefore int, m *discordgo.MessageCreate) {
+	// Don't show error messages if stop was recently requested
+	if stopRequested {
+		log.Printf("[DEBUG] prepDisplayQueue skipped - stop was recently requested")
+		return
+	}
+
+	// Debug logging to understand when this function is called inappropriately
+	log.Printf("[DEBUG] prepDisplayQueue called: commData=%v, queueLenBefore=%d, currentQueueLen=%d", commData, queueLenBefore, len(queue))
+
 	// Only display queue if it grew in size...
 	if queueLenBefore < len(queue) {
 		displayQueue(m)
 	} else {
-		if _, err := strconv.Atoi(commData[1]); err == nil {
-			return
+		// Check if this is a numeric input (search result selection)
+		if len(commData) > 1 {
+			if _, err := strconv.Atoi(commData[1]); err == nil {
+				log.Printf("[DEBUG] Skipping error message - detected numeric input: %s", commData[1])
+				return
+			}
 		}
 
-		nothingAddedMessage := "**[Muse]** Nothing was added, playlist or song was empty...\n"
-		nothingAddedMessage = nothingAddedMessage + "Note:\n"
-		nothingAddedMessage = nothingAddedMessage + "- Playlists should have the following url structure: <https://www.youtube.com/playlist?list=><PLAYLIST IDENTIFIER>\n"
-		nothingAddedMessage = nothingAddedMessage + "- Videos should have the following url structure: <https://www.youtube.com/watch?v=><VIDEO IDENTIFIER>\n"
-		nothingAddedMessage = nothingAddedMessage + "- Youtu.be links or links set at a certain time (t=#s) have not been implemented - sorry!"
-		s.ChannelMessageSend(m.ChannelID, nothingAddedMessage)
+		// Only show error message if we're actually trying to add content
+		// Skip if this seems to be an end-of-queue or stop scenario
+		if len(commData) > 1 && (strings.Contains(commData[1], "http") || len(commData[1]) > 3) {
+			log.Printf("[DEBUG] Showing 'nothing added' message for command: %v", commData)
+			nothingAddedMessage := "**[Muse]** Nothing was added, playlist or song was empty...\n"
+			nothingAddedMessage = nothingAddedMessage + "Note:\n"
+			nothingAddedMessage = nothingAddedMessage + "- Playlists should have the following url structure: <https://www.youtube.com/playlist?list=><PLAYLIST IDENTIFIER>\n"
+			nothingAddedMessage = nothingAddedMessage + "- Videos should have the following url structure: <https://www.youtube.com/watch?v=><VIDEO IDENTIFIER>\n"
+			nothingAddedMessage = nothingAddedMessage + "- Youtu.be links or links set at a certain time (t=#s) have not been implemented - sorry!"
+			s.ChannelMessageSend(m.ChannelID, nothingAddedMessage)
+		} else {
+			log.Printf("[DEBUG] Skipping error message - command doesn't seem to be adding content: %v", commData)
+		}
 	}
 }
 

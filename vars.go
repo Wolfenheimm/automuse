@@ -17,6 +17,7 @@ var (
 	botToken        string
 	youtubeToken    string
 	searchRequested bool
+	stopRequested   bool // Flag to prevent queue processing after stop command
 	service         *youtube.Service
 	s               *discordgo.Session
 	v               = new(VoiceInstance)

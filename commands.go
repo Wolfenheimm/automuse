@@ -14,6 +14,11 @@ import (
 
 // Get & queue audio in a YouTube video / playlist
 func queueSong(m *discordgo.MessageCreate) {
+	// Prevent queue processing if stop was recently requested
+	if stopRequested {
+		return
+	}
+
 	commData, commDataIsValid := sanitizeQueueSongInputs(m)
 	queueLenBefore := len(queue)
 	playbackAlreadyStarted := false
@@ -25,6 +30,9 @@ func queueSong(m *discordgo.MessageCreate) {
 		errorHandler.Handle(err, m.ChannelID)
 		return
 	}
+
+	// Clear stop flag when starting new queue operation
+	stopRequested = false
 
 	// Check if a youtube link is present
 	if strings.Contains(m.Content, "https://www.youtube") {
@@ -103,6 +111,7 @@ func stop(m *discordgo.MessageCreate) {
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Stopping ["+v.nowPlaying.Title+"] & Clearing Queue :octagonal_sign:")
 	v.stop = true
 	queue = []Song{}
+	stopRequested = true // Set flag to prevent additional queue processing
 	resetSearch()
 
 	// Stop buffer manager
