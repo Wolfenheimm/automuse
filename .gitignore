@@ -35,5 +35,5 @@ go.work
 # Storage
 .DS_Store
 
-# Downloads
-./downloads/metadata.json
+# Downloads directory
+downloads/
