@@ -782,7 +782,7 @@ func preBufferSong(song Song, isManual bool) bool {
 			"--no-playlist",         // Don't download playlists
 			"-x",                    // Extract audio
 			"--audio-format", "mp3", // Convert to MP3
-			"--audio-quality", "192K", // Set quality
+			"--audio-quality", "256K", // Increased from 192K to 256K for better quality
 			"--no-warnings", // Reduce noise in logs
 			"--quiet",       // Even less output for pre-buffering
 			"-o", mp3Path,   // Output file

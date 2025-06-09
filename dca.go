@@ -109,7 +109,7 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool, useExistingConnection bool
 				"--no-playlist",         // Don't download playlists
 				"-x",                    // Extract audio
 				"--audio-format", "mp3", // Convert to MP3
-				"--audio-quality", "192K", // Set quality
+				"--audio-quality", "256K", // Increased from 192K to 256K for better quality
 				"--no-warnings", // Reduce noise in logs
 				"--progress",    // Show progress
 				"-o", mp3Path,   // Output file

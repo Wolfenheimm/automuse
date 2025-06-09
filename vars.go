@@ -26,9 +26,9 @@ var (
 	song            = Song{}
 	searchQueue     = []SongSearch{}
 	queue           = []Song{}
-	queueMutex      sync.Mutex       // Mutex for thread-safe queue operations
-	metadataManager *MetadataManager // Metadata manager for song caching
-	bufferManager   *BufferManager   // Buffer manager for pre-downloading songs
+	queueMutex      sync.Mutex            // Mutex for thread-safe queue operations
+	metadataManager *MetadataManager      // Metadata manager for song caching
+	bufferManager   = NewBufferManager(5) // Increased from 3 to 5 songs for better skip performance
 )
 
 // Sets up the DCA encoder options

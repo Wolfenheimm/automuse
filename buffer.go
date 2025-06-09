@@ -109,7 +109,7 @@ func (bm *BufferManager) PreDownloadInitialSongs(songs []Song, session *discordg
 	}
 
 	// Download songs in parallel with limited concurrency
-	maxConcurrent := 2
+	maxConcurrent := 4 // Increased from 2 to 4 for faster downloads
 	semaphore := make(chan struct{}, maxConcurrent)
 	var wg sync.WaitGroup
 	downloadResults := make(chan bool, len(songsToDownload))
@@ -183,7 +183,7 @@ func (bm *BufferManager) maintainBuffer() {
 
 			// Download songs that need downloading (limit concurrent downloads)
 			if len(songsToDownload) > 0 {
-				for _, song := range songsToDownload[:min(2, len(songsToDownload))] {
+				for _, song := range songsToDownload[:min(4, len(songsToDownload))] {
 					go func(s Song) {
 						bm.mutex.Lock()
 						bm.downloading[s.VidID] = true
@@ -290,9 +290,9 @@ func downloadSongToCache(song Song) bool {
 		"--no-playlist",         // Don't download playlists
 		"-x",                    // Extract audio
 		"--audio-format", "mp3", // Convert to MP3
-		"--audio-quality", "192K", // Set quality
+		"--audio-quality", "256K", // Increased from 192K to 256K for better quality
 		"--no-warnings", // Reduce noise in logs
-		"--quiet",       // Even less output for background downloads
+		"--progress",    // Show download progress for buffer downloads
 		"-o", mp3Path,   // Output file
 		originalURL) // Original YouTube URL
 

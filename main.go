@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -34,9 +35,6 @@ func init() {
 
 	// Initialize metadata manager
 	metadataManager = NewMetadataManager("downloads/metadata.json")
-
-	// Initialize buffer manager with 3-song buffer
-	bufferManager = NewBufferManager(3)
 
 	// Cleanup any missing files on startup
 	if err := metadataManager.CleanupMissing(); err != nil {
@@ -201,7 +199,64 @@ func (c *CacheCommand) CanHandle(content string) bool {
 func (c *CacheCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
 	go func() {
 		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
-		showCache(m)
+		cacheStatsCommand(s, m, nil)
+	}()
+	return nil
+}
+
+type CacheClearCommand struct{}
+
+func (c *CacheClearCommand) CanHandle(content string) bool {
+	return content == "cache-clear"
+}
+func (c *CacheClearCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		cacheClearCommand(s, m, nil)
+	}()
+	return nil
+}
+
+type BufferStatusCommand struct{}
+
+func (b *BufferStatusCommand) CanHandle(content string) bool {
+	return content == "buffer-status"
+}
+func (b *BufferStatusCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		bufferStatusCommand(s, m, nil)
+	}()
+	return nil
+}
+
+type MoveQueueCommand struct{}
+
+func (mq *MoveQueueCommand) CanHandle(content string) bool {
+	return strings.HasPrefix(content, "move ")
+}
+func (mq *MoveQueueCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
+	parts := strings.Fields(m.Content)
+	if len(parts) < 3 {
+		return fmt.Errorf("move command requires from and to positions")
+	}
+
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		moveQueueCommand(s, m, parts[1:])
+	}()
+	return nil
+}
+
+type ShuffleQueueCommand struct{}
+
+func (sq *ShuffleQueueCommand) CanHandle(content string) bool {
+	return content == "shuffle"
+}
+func (sq *ShuffleQueueCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		shuffleQueueCommand(s, m, nil)
 	}()
 	return nil
 }
@@ -216,6 +271,10 @@ var commandHandlers = []CommandHandler{
 	&QueueCommand{},
 	&RemoveCommand{},
 	&CacheCommand{},
+	&CacheClearCommand{},
+	&BufferStatusCommand{},
+	&MoveQueueCommand{},
+	&ShuffleQueueCommand{},
 }
 
 func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {

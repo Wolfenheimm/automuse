@@ -272,6 +272,72 @@ func (mm *MetadataManager) GetStats() map[string]interface{} {
 	}
 }
 
+// StatsData represents detailed cache statistics
+type StatsData struct {
+	TotalSongs   int
+	TotalPlays   int
+	AverageUsage float64
+	TopSongs     []*SongMetadata
+}
+
+// GetDetailedStats returns detailed cache statistics including top songs
+func (mm *MetadataManager) GetDetailedStats() StatsData {
+	mm.mutex.RLock()
+	defer mm.mutex.RUnlock()
+
+	var totalPlays int
+	var songs []*SongMetadata
+
+	for _, metadata := range mm.metadata {
+		totalPlays += metadata.UseCount
+		songs = append(songs, metadata)
+	}
+
+	// Sort songs by use count (descending)
+	for i := 0; i < len(songs)-1; i++ {
+		for j := i + 1; j < len(songs); j++ {
+			if songs[j].UseCount > songs[i].UseCount {
+				songs[i], songs[j] = songs[j], songs[i]
+			}
+		}
+	}
+
+	averageUsage := 0.0
+	if len(songs) > 0 {
+		averageUsage = float64(totalPlays) / float64(len(songs))
+	}
+
+	return StatsData{
+		TotalSongs:   len(songs),
+		TotalPlays:   totalPlays,
+		AverageUsage: averageUsage,
+		TopSongs:     songs,
+	}
+}
+
+// GetOldSongs returns songs older than the specified duration
+func (mm *MetadataManager) GetOldSongs(maxAge time.Duration) []*SongMetadata {
+	mm.mutex.RLock()
+	defer mm.mutex.RUnlock()
+
+	cutoff := time.Now().Add(-maxAge)
+	var oldSongs []*SongMetadata
+
+	for _, metadata := range mm.metadata {
+		// Consider a song old if both downloaded and last used are before cutoff
+		if metadata.DownloadedAt.Before(cutoff) && metadata.LastUsed.Before(cutoff) {
+			oldSongs = append(oldSongs, metadata)
+		}
+	}
+
+	return oldSongs
+}
+
+// SaveMetadata exposes the save functionality publicly
+func (mm *MetadataManager) SaveMetadata() error {
+	return mm.saveMetadata()
+}
+
 // extractArtistFromTitle attempts to extract artist name from title
 func extractArtistFromTitle(title string) string {
 	// Common separators between artist and song

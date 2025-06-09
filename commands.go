@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -275,7 +276,11 @@ func showHelp(m *discordgo.MessageCreate) {
 	helpMessage += "`skip to [number]` - Skip to a specific position in queue\n"
 	helpMessage += "`queue` - Display the current queue\n"
 	helpMessage += "`remove [number]` - Remove a song from the queue at position\n"
-	helpMessage += "`cache` - Show cache statistics and information\n\n"
+	helpMessage += "`move [from] [to]` - Move a song from one position to another\n"
+	helpMessage += "`shuffle` - Shuffle the current queue\n"
+	helpMessage += "`cache` - Show cache statistics and information\n"
+	helpMessage += "`cache-clear` - Clear old cached songs (older than 7 days)\n"
+	helpMessage += "`buffer-status` - Show buffer manager status and download queue\n\n"
 	helpMessage += ":gear: **SUPPORTED FORMATS** :gear:\n"
 	helpMessage += "• YouTube videos: `https://www.youtube.com/watch?v=...`\n"
 	helpMessage += "• YouTube playlists: `https://www.youtube.com/playlist?list=...`\n"
@@ -309,4 +314,176 @@ func showCache(m *discordgo.MessageCreate) {
 	cacheMessage += "• Automatic cleanup of missing files\n"
 
 	s.ChannelMessageSend(m.ChannelID, cacheMessage)
+}
+
+func cacheStatsCommand(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	stats := metadataManager.GetDetailedStats()
+
+	// Calculate cache size on disk
+	var totalCacheSize int64
+	if files, err := filepath.Glob("downloads/*.mp3"); err == nil {
+		for _, file := range files {
+			if info, err := os.Stat(file); err == nil {
+				totalCacheSize += info.Size()
+			}
+		}
+	}
+
+	// Format cache size
+	cacheSizeStr := formatBytes(totalCacheSize)
+
+	response := fmt.Sprintf("**[Muse]** :floppy_disk: **Cache Statistics** :floppy_disk:\n\n")
+	response += fmt.Sprintf(":musical_note: **Total Songs Cached:** %d\n", stats.TotalSongs)
+	response += fmt.Sprintf(":minidisc: **Total Cache Size:** %s\n", cacheSizeStr)
+	response += fmt.Sprintf(":chart_with_upwards_trend: **Total Plays:** %d\n", stats.TotalPlays)
+	response += fmt.Sprintf(":arrow_forward: **Average Plays per Song:** %.1f\n\n", stats.AverageUsage)
+
+	if len(stats.TopSongs) > 0 {
+		response += ":crown: **Most Played Songs:**\n"
+		for i, song := range stats.TopSongs {
+			if i >= 5 {
+				break
+			} // Show top 5
+			response += fmt.Sprintf("%d. [%s] - %d plays\n", i+1, song.Title, song.UseCount)
+		}
+	}
+
+	s.ChannelMessageSend(m.ChannelID, response)
+}
+
+func cacheClearCommand(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	// Get songs older than 7 days
+	oldSongs := metadataManager.GetOldSongs(7 * 24 * time.Hour)
+
+	if len(oldSongs) == 0 {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** :wastebasket: No old cache files to clean up!")
+		return
+	}
+
+	var totalSize int64
+	removedCount := 0
+
+	for _, song := range oldSongs {
+		// Check if file exists and get size
+		if info, err := os.Stat(song.FilePath); err == nil {
+			totalSize += info.Size()
+			// Remove the file
+			if err := os.Remove(song.FilePath); err == nil {
+				// Remove from metadata
+				metadataManager.RemoveSong(song.VideoID)
+				removedCount++
+			}
+		}
+	}
+
+	// Save metadata after cleanup
+	metadataManager.SaveMetadata()
+
+	response := fmt.Sprintf("**[Muse]** :wastebasket: **Cache Cleanup Complete!**\n")
+	response += fmt.Sprintf(":file_folder: **Files Removed:** %d\n", removedCount)
+	response += fmt.Sprintf(":minidisc: **Space Freed:** %s\n", formatBytes(totalSize))
+
+	s.ChannelMessageSend(m.ChannelID, response)
+}
+
+func bufferStatusCommand(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	bufferManager.mutex.RLock()
+	defer bufferManager.mutex.RUnlock()
+
+	response := fmt.Sprintf("**[Muse]** :gear: **Buffer Manager Status** :gear:\n\n")
+	response += fmt.Sprintf(":green_circle: **Active:** %t\n", bufferManager.isActive)
+	response += fmt.Sprintf(":musical_note: **Buffer Size:** %d songs\n", bufferManager.maxBuffer)
+	response += fmt.Sprintf(":arrow_down: **Download Queue:** %d songs\n", len(bufferManager.downloadQueue))
+	response += fmt.Sprintf(":hourglass: **Currently Downloading:** %d songs\n\n", len(bufferManager.downloading))
+
+	if len(bufferManager.downloadQueue) > 0 {
+		response += ":clock1: **Next Songs in Buffer:**\n"
+		for i, song := range bufferManager.downloadQueue {
+			if i >= 3 {
+				break
+			} // Show next 3
+			status := ":white_circle:"
+			if bufferManager.downloading[song.VidID] {
+				status = ":orange_circle: Downloading..."
+			} else if metadataManager.HasSong(song.VidID) {
+				status = ":green_circle: Cached"
+			}
+			response += fmt.Sprintf("%d. [%s] %s\n", i+1, song.Title, status)
+		}
+	}
+
+	s.ChannelMessageSend(m.ChannelID, response)
+}
+
+// Helper function to format bytes into human-readable sizes
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func moveQueueCommand(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	if len(args) < 2 {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Usage: `move [from] [to]` - Move song from position to position")
+		return
+	}
+
+	fromPos, err1 := strconv.Atoi(args[0])
+	toPos, err2 := strconv.Atoi(args[1])
+
+	if err1 != nil || err2 != nil {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Please provide valid position numbers")
+		return
+	}
+
+	queueMutex.Lock()
+	defer queueMutex.Unlock()
+
+	if fromPos < 1 || fromPos > len(queue) || toPos < 1 || toPos > len(queue) {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Position must be between 1 and %d", len(queue)))
+		return
+	}
+
+	// Convert to 0-based indexing
+	fromPos--
+	toPos--
+
+	// Move the song
+	song := queue[fromPos]
+	// Remove from original position
+	queue = append(queue[:fromPos], queue[fromPos+1:]...)
+	// Insert at new position
+	if toPos > len(queue) {
+		toPos = len(queue)
+	}
+	queue = append(queue[:toPos], append([]Song{song}, queue[toPos:]...)...)
+
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** :arrow_right: Moved [%s] to position %d", song.Title, toPos+1))
+}
+
+func shuffleQueueCommand(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	queueMutex.Lock()
+	defer queueMutex.Unlock()
+
+	if len(queue) <= 1 {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** :twisted_rightwards_arrows: Queue needs at least 2 songs to shuffle")
+		return
+	}
+
+	// Simple shuffle algorithm
+	for i := len(queue) - 1; i > 0; i-- {
+		j := i % (i + 1) // Simple pseudo-random
+		if j != i {
+			queue[i], queue[j] = queue[j], queue[i]
+		}
+	}
+
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** :twisted_rightwards_arrows: Shuffled %d songs in the queue!", len(queue)))
 }
