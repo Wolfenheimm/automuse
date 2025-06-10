@@ -6,20 +6,71 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/bwmarrin/discordgo"
 	"google.golang.org/api/option"
 	"google.golang.org/api/youtube/v3"
 )
 
+// Configuration struct for better management
+type Config struct {
+	BotToken     string
+	YoutubeToken string
+	GuildID      string
+	ChannelID    string
+	Debug        bool
+}
+
 // Global error handler
 var errorHandler *ErrorHandler
 
+// LoadConfig loads configuration from environment variables with validation
+func LoadConfig() (*Config, error) {
+	config := &Config{
+		BotToken:     os.Getenv("BOT_TOKEN"),
+		YoutubeToken: os.Getenv("YT_TOKEN"),
+		GuildID:      os.Getenv("GUILD_ID"),
+		ChannelID:    os.Getenv("GENERAL_CHAT_ID"),
+		Debug:        os.Getenv("DEBUG") == "true",
+	}
+
+	// Validate required configuration
+	var missing []string
+	if config.BotToken == "" {
+		missing = append(missing, "BOT_TOKEN")
+	}
+	if config.YoutubeToken == "" {
+		missing = append(missing, "YT_TOKEN")
+	}
+
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("missing required environment variables: %s", strings.Join(missing, ", "))
+	}
+
+	// Log configuration (with sensitive data redacted)
+	log.Printf("Configuration loaded:")
+	log.Printf("- Bot Token: %s***", config.BotToken[:8])
+	log.Printf("- YouTube Token: %s***", config.YoutubeToken[:8])
+	log.Printf("- Guild ID: %s", config.GuildID)
+	log.Printf("- Channel ID: %s", config.ChannelID)
+	log.Printf("- Debug Mode: %t", config.Debug)
+
+	return config, nil
+}
+
 // Initialize Discord & Setup Youtube
 func init() {
-	var err error
-	botToken = os.Getenv("BOT_TOKEN")    // Set your discord bot token as an environment variable.
-	youtubeToken = os.Getenv("YT_TOKEN") // Set your YouTube token as an environment variable.
+	// Load configuration
+	config, err := LoadConfig()
+	if err != nil {
+		log.Fatalf("Configuration error: %v", err)
+	}
+
+	botToken = config.BotToken
+	youtubeToken = config.YoutubeToken
+
+	// Initialize Discord session
 	s, err = discordgo.New("Bot " + botToken)
 	if err != nil {
 		log.Fatalf("Invalid bot parameters: %v", err)
@@ -28,6 +79,7 @@ func init() {
 	// Initialize error handler
 	errorHandler = NewErrorHandler(s)
 
+	// Initialize YouTube service
 	service, err = youtube.NewService(ctx, option.WithAPIKey(youtubeToken))
 	if err != nil {
 		log.Fatalf("Error creating new YouTube client: %v", err)
@@ -43,27 +95,75 @@ func init() {
 
 	v.stop = true // Used to check if the bot is in channel playing music.
 	searchRequested = false
+
+	log.Println("AutoMuse initialization completed successfully")
 }
 
 func main() {
+	log.Println("Starting AutoMuse Discord Music Bot...")
+
 	// Add function handlers to trigger commands from discord chat
 	s.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
-		log.Println("Firing up...")
+		log.Printf("Bot is ready! Logged in as: %s#%s", r.User.Username, r.User.Discriminator)
+		log.Printf("Bot ID: %s", r.User.ID)
+		log.Printf("Connected to %d guilds", len(r.Guilds))
+
+		// Set bot status
+		err := s.UpdateStatusComplex(discordgo.UpdateStatusData{
+			Activities: []*discordgo.Activity{
+				{
+					Name: "music 🎵 | play help",
+					Type: discordgo.ActivityTypeListening,
+				},
+			},
+			Status: "online",
+		})
+		if err != nil {
+			log.Printf("WARN: Failed to set bot status: %v", err)
+		}
 	})
 
 	s.AddHandler(executionHandler)
 
+	// Open Discord session
 	err := s.Open()
 	if err != nil {
 		log.Fatalf("Cannot open the session: %v", err)
 	}
-	defer s.Close()
-	log.Println("Session Open...")
+	defer func() {
+		log.Println("Closing Discord session...")
+		s.Close()
+	}()
 
+	log.Println("Session Open - AutoMuse is now running!")
+	log.Println("Press Ctrl+C to exit")
+
+	// Set up graceful shutdown
 	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	// Wait for shutdown signal
 	<-stop
-	log.Println("Graceful shutdown")
+
+	log.Println("Shutdown signal received, cleaning up...")
+
+	// Graceful shutdown procedures
+	if v.voice != nil {
+		log.Println("Disconnecting from voice channel...")
+		v.voice.Disconnect()
+	}
+
+	if bufferManager != nil {
+		log.Println("Stopping buffer manager...")
+		bufferManager.StopBuffering()
+	}
+
+	if metadataManager != nil {
+		log.Println("Saving metadata...")
+		metadataManager.SaveMetadata()
+	}
+
+	log.Println("AutoMuse shutdown complete")
 }
 
 // CommandHandler interface for better command organization

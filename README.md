@@ -23,6 +23,8 @@ _A high-performance Discord music bot written in Go with advanced YouTube integr
 - 🎛️ **Comprehensive Controls** - Skip, move, shuffle, and manage your music experience
 - 📊 **Cache Analytics** - Track usage statistics and manage storage efficiently
 - 🔄 **Parallel Processing** - 4x concurrent downloads for faster playlist loading
+- 🛡️ **Memory Safety** - Optimized audio buffer settings prevent memory exhaustion
+- 🔧 **Smart Configuration** - Environment variable validation and safe defaults
 
 ## 🖥️ Platform Support
 
@@ -77,6 +79,16 @@ sudo chmod a+rx /usr/local/bin/yt-dlp
 
 AutoMuse requires two essential tokens to function properly:
 
+### Required Environment Variables
+
+| Variable          | Required    | Description              | Example                       |
+| ----------------- | ----------- | ------------------------ | ----------------------------- |
+| `BOT_TOKEN`       | ✅ Yes      | Discord bot token        | `MTIzNDU2Nzg5MDEyMzQ1Njc4...` |
+| `YT_TOKEN`        | ✅ Yes      | YouTube Data API v3 key  | `AIzaSyA1B2C3D4E5F6G7H8I9...` |
+| `GUILD_ID`        | ⚠️ Optional | Discord server ID        | `123456789012345678`          |
+| `GENERAL_CHAT_ID` | ⚠️ Optional | Default voice channel ID | `987654321098765432`          |
+| `DEBUG`           | ⚠️ Optional | Enable debug logging     | `true` or `false`             |
+
 ### Discord Bot Token
 
 1. **Create a Discord Application**
@@ -127,6 +139,7 @@ AutoMuse requires two essential tokens to function properly:
 ```bash
 export BOT_TOKEN="your_discord_bot_token_here"
 export YT_TOKEN="your_youtube_api_key_here"
+export DEBUG="false"  # Optional: Enable debug logging
 ```
 
 #### Method 2: .env File (Recommended)
@@ -135,6 +148,7 @@ export YT_TOKEN="your_youtube_api_key_here"
 # Create .env file in project root
 echo "BOT_TOKEN=your_discord_bot_token_here" > .env
 echo "YT_TOKEN=your_youtube_api_key_here" >> .env
+echo "DEBUG=false" >> .env
 ```
 
 #### Method 3: Shell Profile (Permanent)
@@ -143,6 +157,7 @@ echo "YT_TOKEN=your_youtube_api_key_here" >> .env
 # Add to ~/.zshrc or ~/.bashrc
 echo 'export BOT_TOKEN="your_discord_bot_token_here"' >> ~/.zshrc
 echo 'export YT_TOKEN="your_youtube_api_key_here"' >> ~/.zshrc
+echo 'export DEBUG="false"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
