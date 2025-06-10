@@ -59,7 +59,7 @@ func queueSong(m *discordgo.MessageCreate) {
 			return
 		}
 		prepFirstSongEntered(m, false)
-	} else if !searchRequested {
+	} else if !searchRequested && !stopRequested {
 		prepDisplayQueue(commData, queueLenBefore, m)
 	}
 }
@@ -124,6 +124,9 @@ func stop(m *discordgo.MessageCreate) {
 	if v.voice != nil {
 		v.voice.Disconnect()
 	}
+
+	// Reset the stop flag after everything has stopped
+	stopRequested = false
 }
 
 // Skips the current song

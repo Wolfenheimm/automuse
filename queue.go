@@ -441,7 +441,8 @@ func prepDisplayQueue(commData []string, queueLenBefore int, m *discordgo.Messag
 
 		// Only show error message if we're actually trying to add content
 		// Skip if this seems to be an end-of-queue or stop scenario
-		if len(commData) > 1 && (strings.Contains(commData[1], "http") || len(commData[1]) > 3) {
+		// TODO: stopRequested is not doing its intended job here and might be due to threading
+		if !stopRequested && len(commData) > 1 && (strings.Contains(commData[1], "http") || len(commData[1]) > 3) {
 			log.Printf("[DEBUG] Showing 'nothing added' message for command: %v", commData)
 			nothingAddedMessage := "**[Muse]** Nothing was added, playlist or song was empty...\n"
 			nothingAddedMessage = nothingAddedMessage + "Note:\n"
