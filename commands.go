@@ -303,28 +303,6 @@ func showHelp(m *discordgo.MessageCreate) {
 	s.ChannelMessageSend(m.ChannelID, helpMessage)
 }
 
-// Shows cache statistics and information
-func showCache(m *discordgo.MessageCreate) {
-	stats := metadataManager.GetStats()
-
-	cacheMessage := ":floppy_disk: **[Muse] CACHE STATISTICS** :floppy_disk:\n\n"
-	cacheMessage += fmt.Sprintf(":musical_note: **Total Songs Cached:** %d\n", stats["total_songs"])
-	cacheMessage += fmt.Sprintf(":package: **Total Size:** %d MB\n", stats["total_size_mb"])
-	cacheMessage += fmt.Sprintf(":crown: **Most Used Count:** %d plays\n", stats["highest_use"])
-
-	if oldestDownload, ok := stats["oldest_download"].(time.Time); ok && stats["total_songs"].(int) > 0 {
-		cacheMessage += fmt.Sprintf(":calendar: **Oldest Download:** %s\n", oldestDownload.Format("2006-01-02 15:04"))
-	}
-
-	cacheMessage += "\n:recycle: **Cache Benefits:**\n"
-	cacheMessage += "• Instant playback for cached songs\n"
-	cacheMessage += "• Duplicate detection prevents redundant downloads\n"
-	cacheMessage += "• Usage tracking shows popular songs\n"
-	cacheMessage += "• Automatic cleanup of missing files\n"
-
-	s.ChannelMessageSend(m.ChannelID, cacheMessage)
-}
-
 func cacheStatsCommand(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 	stats := metadataManager.GetDetailedStats()
 
@@ -341,7 +319,7 @@ func cacheStatsCommand(s *discordgo.Session, m *discordgo.MessageCreate, args []
 	// Format cache size
 	cacheSizeStr := formatBytes(totalCacheSize)
 
-	response := fmt.Sprintf("**[Muse]** :floppy_disk: **Cache Statistics** :floppy_disk:\n\n")
+	response := "**[Muse]** :floppy_disk: **Cache Statistics** :floppy_disk:\n\n"
 	response += fmt.Sprintf(":musical_note: **Total Songs Cached:** %d\n", stats.TotalSongs)
 	response += fmt.Sprintf(":minidisc: **Total Cache Size:** %s\n", cacheSizeStr)
 	response += fmt.Sprintf(":chart_with_upwards_trend: **Total Plays:** %d\n", stats.TotalPlays)
@@ -388,7 +366,7 @@ func cacheClearCommand(s *discordgo.Session, m *discordgo.MessageCreate, args []
 	// Save metadata after cleanup
 	metadataManager.SaveMetadata()
 
-	response := fmt.Sprintf("**[Muse]** :wastebasket: **Cache Cleanup Complete!**\n")
+	response := "**[Muse]** :wastebasket: **Cache Cleanup Complete!**\n"
 	response += fmt.Sprintf(":file_folder: **Files Removed:** %d\n", removedCount)
 	response += fmt.Sprintf(":minidisc: **Space Freed:** %s\n", formatBytes(totalSize))
 
@@ -399,7 +377,7 @@ func bufferStatusCommand(s *discordgo.Session, m *discordgo.MessageCreate, args 
 	bufferManager.mutex.RLock()
 	defer bufferManager.mutex.RUnlock()
 
-	response := fmt.Sprintf("**[Muse]** :gear: **Buffer Manager Status** :gear:\n\n")
+	response := "**[Muse]** :gear: **Buffer Manager Status** :gear:\n\n"
 	response += fmt.Sprintf(":green_circle: **Active:** %t\n", bufferManager.isActive)
 	response += fmt.Sprintf(":musical_note: **Buffer Size:** %d songs\n", bufferManager.maxBuffer)
 	response += fmt.Sprintf(":arrow_down: **Download Queue:** %d songs\n", len(bufferManager.downloadQueue))

@@ -155,51 +155,48 @@ func (bm *BufferManager) maintainBuffer() {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			bm.mutex.RLock()
-			if !bm.isActive {
-				bm.mutex.RUnlock()
-				return
-			}
-
-			// Check which songs in the buffer need downloading
-			var songsToDownload []Song
-			for _, song := range bm.downloadQueue {
-				// Skip if already cached
-				if metadataManager.HasSong(song.VidID) {
-					continue
-				}
-
-				// Skip if currently downloading
-				if bm.downloading[song.VidID] {
-					continue
-				}
-
-				songsToDownload = append(songsToDownload, song)
-			}
+	for range ticker.C {
+		bm.mutex.RLock()
+		if !bm.isActive {
 			bm.mutex.RUnlock()
+			return
+		}
 
-			// Download songs that need downloading (limit concurrent downloads)
-			if len(songsToDownload) > 0 {
-				for _, song := range songsToDownload[:min(4, len(songsToDownload))] {
-					go func(s Song) {
-						bm.mutex.Lock()
-						bm.downloading[s.VidID] = true
-						bm.mutex.Unlock()
+		// Check which songs in the buffer need downloading
+		var songsToDownload []Song
+		for _, song := range bm.downloadQueue {
+			// Skip if already cached
+			if metadataManager.HasSong(song.VidID) {
+				continue
+			}
 
-						success := bm.downloadSong(s, 0, 0) // 0 index means background download
+			// Skip if currently downloading
+			if bm.downloading[song.VidID] {
+				continue
+			}
 
-						bm.mutex.Lock()
-						delete(bm.downloading, s.VidID)
-						bm.mutex.Unlock()
+			songsToDownload = append(songsToDownload, song)
+		}
+		bm.mutex.RUnlock()
 
-						if success {
-							log.Printf("INFO: Background buffer download completed: %s", s.Title)
-						}
-					}(song)
-				}
+		// Download songs that need downloading (limit concurrent downloads)
+		if len(songsToDownload) > 0 {
+			for _, song := range songsToDownload[:min(4, len(songsToDownload))] {
+				go func(s Song) {
+					bm.mutex.Lock()
+					bm.downloading[s.VidID] = true
+					bm.mutex.Unlock()
+
+					success := bm.downloadSong(s, 0, 0) // 0 index means background download
+
+					bm.mutex.Lock()
+					delete(bm.downloading, s.VidID)
+					bm.mutex.Unlock()
+
+					if success {
+						log.Printf("INFO: Background buffer download completed: %s", s.Title)
+					}
+				}(song)
 			}
 		}
 	}
