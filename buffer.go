@@ -231,14 +231,6 @@ func (bm *BufferManager) downloadSong(song Song, progressIndex, totalCount int) 
 	return success
 }
 
-// Helper function to find minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // downloadSongToCache downloads a song and saves it to cache with metadata
 func downloadSongToCache(song Song) bool {
 	log.Printf("INFO: Downloading to cache: %s (ID: %s)", song.Title, song.VidID)
