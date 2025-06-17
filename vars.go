@@ -17,7 +17,8 @@ var (
 	botToken        string
 	youtubeToken    string
 	searchRequested bool
-	stopRequested   bool // Flag to prevent queue processing after stop command
+	stopRequested   bool         // Flag to prevent queue processing after stop command
+	stopMutex       sync.RWMutex // Mutex for thread-safe stopRequested access
 	service         *youtube.Service
 	s               *discordgo.Session
 	v               = new(VoiceInstance)
@@ -90,4 +91,17 @@ func init() {
 	// Calculate estimated memory usage for the buffer
 	estimatedMemoryMB := float64(opts.BufferedFrames*opts.FrameRate*2*2) / (1024 * 1024) // Rough estimate
 	log.Printf("- Estimated buffer memory usage: ~%.1fMB", estimatedMemoryMB)
+}
+
+// Thread-safe functions for stopRequested flag
+func setStopRequested(value bool) {
+	stopMutex.Lock()
+	defer stopMutex.Unlock()
+	stopRequested = value
+}
+
+func isStopRequested() bool {
+	stopMutex.RLock()
+	defer stopMutex.RUnlock()
+	return stopRequested
 }

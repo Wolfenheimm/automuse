@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -14,6 +15,32 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
 	"layeh.com/gopus"
+)
+
+// DCA Audio Constants
+const (
+	// Connection timeouts
+	VoiceConnectionTimeout = 5 * time.Second
+	VoiceReadyRetries      = 5
+	VoiceReadyWaitTime     = 1 * time.Second
+
+	// Audio processing timeouts
+	AudioFrameTimeout  = 1 * time.Second
+	SpeakingStateDelay = 500 * time.Millisecond
+	SkipCheckInterval  = 100 * time.Millisecond
+	HeartbeatInterval  = 5 * time.Second
+
+	// Audio quality settings
+	FFmpegBitrate     = 128000 // 128 kbps for Opus encoding
+	FFmpegSampleRate  = 48000  // 48kHz - Discord standard
+	FFmpegChannels    = 2      // Stereo
+	OpusFrameSize     = 960    // Standard Opus frame size
+	OpusFrameDuration = 20     // 20ms frame duration
+
+	// Early stream detection
+	MinStreamDuration   = 1 * time.Second // Minimum expected stream duration
+	EarlyEndCheckDelay  = 2 * time.Second // Check for early stream end
+	MinExpectedDuration = 5 * time.Second // Minimum duration for early end detection
 )
 
 // Encodes the video for audio playback
@@ -189,18 +216,18 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool, useExistingConnection bool
 
 		// Wait for voice connection to be ready
 		ready := false
-		for i := range 5 {
+		for i := range VoiceReadyRetries {
 			if vc != nil && vc.Ready {
 				ready = true
 				log.Printf("INFO: Voice connection is ready after %d attempts", i+1)
 				break
 			}
-			log.Printf("INFO: Waiting for voice connection to be ready (attempt %d/5)", i+1)
-			time.Sleep(1 * time.Second)
+			log.Printf("INFO: Waiting for voice connection to be ready (attempt %d/%d)", i+1, VoiceReadyRetries)
+			time.Sleep(VoiceReadyWaitTime)
 		}
 
 		if !ready {
-			log.Printf("ERROR: Voice connection failed to become ready after 5 attempts")
+			log.Printf("ERROR: Voice connection failed to become ready after %d attempts", VoiceReadyRetries)
 			return
 		}
 	}
@@ -287,7 +314,7 @@ func (v *VoiceInstance) DirectDCA(filePath string) {
 	}
 
 	// Give Discord a moment to register the speaking state
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(SpeakingStateDelay)
 
 	// Encode the file
 	log.Printf("INFO: Creating encoding session for %s", filePath)
@@ -316,11 +343,11 @@ func (v *VoiceInstance) DirectDCA(filePath string) {
 	log.Printf("INFO: Streaming audio (should play for approximately %.0f seconds)", estimatedDuration)
 
 	// Set up a heartbeat to maintain the speaking state
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(HeartbeatInterval)
 	defer ticker.Stop()
 
 	// Set up a timer to check for premature stream end
-	earlyEndTimer := time.NewTimer(2 * time.Second)
+	earlyEndTimer := time.NewTimer(EarlyEndCheckDelay)
 	defer earlyEndTimer.Stop()
 
 	// Stream monitoring
@@ -349,7 +376,7 @@ func (v *VoiceInstance) DirectDCA(filePath string) {
 		log.Printf("DEBUG: Stream running for 2+ seconds, continuing to monitor")
 
 		// Create a ticker to check for skip during playback
-		skipCheckTicker := time.NewTicker(100 * time.Millisecond)
+		skipCheckTicker := time.NewTicker(SkipCheckInterval)
 		defer skipCheckTicker.Stop()
 
 		// Wait for either stream completion or skip command
@@ -399,7 +426,7 @@ func (v *VoiceInstance) DirectDCA(filePath string) {
 		}
 
 		// If the stream ended too quickly, it might indicate an issue
-		if duration.Seconds() < 1.0 && estimatedDuration > 5.0 {
+		if duration < MinStreamDuration && estimatedDuration > MinExpectedDuration.Seconds() {
 			log.Printf("WARNING: Audio stream ended too quickly (%.2f seconds). File may be corrupted or format incompatible", duration.Seconds())
 			log.Printf("INFO: Attempting alternative playback method...")
 
@@ -580,8 +607,8 @@ func playMP3WithExistingConnection(vc *discordgo.VoiceConnection, filePath strin
 		"-loglevel", "error",
 		"-i", filePath,
 		"-f", "s16le", // PCM signed 16-bit little-endian
-		"-ar", "48000", // 48KHz sampling rate
-		"-ac", "2", // 2 channels (stereo)
+		"-ar", fmt.Sprintf("%d", FFmpegSampleRate), // 48KHz sampling rate
+		"-ac", fmt.Sprintf("%d", FFmpegChannels), // Stereo channels
 		"-af", "volume=1.5", // Increase volume
 		"pipe:1")
 
@@ -609,7 +636,7 @@ func playMP3WithExistingConnection(vc *discordgo.VoiceConnection, filePath strin
 		var err error
 
 		// Create Opus encoder
-		opusEncoder, err = gopus.NewEncoder(48000, 2, gopus.Audio)
+		opusEncoder, err = gopus.NewEncoder(FFmpegSampleRate, FFmpegChannels, gopus.Audio)
 		if err != nil {
 			log.Printf("ERROR: Failed to create Opus encoder: %v", err)
 			done <- true
@@ -617,10 +644,10 @@ func playMP3WithExistingConnection(vc *discordgo.VoiceConnection, filePath strin
 		}
 
 		// Set the bitrate
-		opusEncoder.SetBitrate(128000) // 128 kbps
+		opusEncoder.SetBitrate(FFmpegBitrate) // 128 kbps
 
 		// Buffer for reading audio data
-		audiobuf := make([]int16, 960*2) // 960 samples * 2 channels
+		audiobuf := make([]int16, OpusFrameSize*FFmpegChannels) // 960 samples * 2 channels
 
 		// Send audio data to Discord
 		for {
@@ -642,7 +669,7 @@ func playMP3WithExistingConnection(vc *discordgo.VoiceConnection, filePath strin
 			}
 
 			// Encode audio to Opus
-			opus, err := opusEncoder.Encode(audiobuf, 960, 960*2*2)
+			opus, err := opusEncoder.Encode(audiobuf, OpusFrameSize, OpusFrameSize*FFmpegChannels*2)
 			if err != nil {
 				log.Printf("ERROR: Error encoding to Opus: %v", err)
 				break
@@ -657,7 +684,7 @@ func playMP3WithExistingConnection(vc *discordgo.VoiceConnection, filePath strin
 	}()
 
 	// Set up a ticker for maintaining speaking state
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(HeartbeatInterval)
 	defer ticker.Stop()
 
 	// Main loop - wait for audio to finish or keep alive

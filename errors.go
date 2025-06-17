@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -86,6 +87,10 @@ func (eh *ErrorHandler) Handle(err error, channelID string) {
 	if botErr, ok = err.(*BotError); !ok {
 		botErr = NewBotError(ErrorTypeInternal, err.Error(),
 			"An unexpected error occurred. Please try again.", err)
+
+		// Add additional context for non-BotError types
+		botErr.WithContext("original_error_type", fmt.Sprintf("%T", err))
+		botErr.WithContext("timestamp", time.Now().Unix())
 	}
 
 	// Log the error with full context
@@ -97,6 +102,9 @@ func (eh *ErrorHandler) Handle(err error, channelID string) {
 		_, discordErr := eh.session.ChannelMessageSend(channelID, userMessage)
 		if discordErr != nil {
 			log.Printf("ERROR: Failed to send error message to Discord: %v", discordErr)
+
+			// If we can't send to Discord, try to log the original error at least
+			log.Printf("ORIGINAL ERROR (failed to send to Discord): %v", botErr.Error())
 		}
 	}
 }

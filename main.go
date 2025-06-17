@@ -218,9 +218,24 @@ func (p *PlayCommand) CanHandle(content string) bool {
 }
 func (p *PlayCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
 	// Validate input before processing
-	if len(strings.TrimSpace(m.Content)) < 5 { // "play" + space + at least 1 char
+	content := strings.TrimSpace(m.Content)
+	if len(content) < 5 { // "play" + space + at least 1 char
 		return NewValidationError("Play command requires additional parameters", nil).
 			WithContext("command", m.Content).
+			WithContext("user_id", m.Author.ID)
+	}
+
+	// Additional validation for content safety
+	if strings.Contains(content, "\n") || strings.Contains(content, "\r") {
+		return NewValidationError("Invalid characters in command", nil).
+			WithContext("command", m.Content).
+			WithContext("user_id", m.Author.ID)
+	}
+
+	// Check for excessively long commands
+	if len(content) > 2000 {
+		return NewValidationError("Command too long", nil).
+			WithContext("command_length", len(content)).
 			WithContext("user_id", m.Author.ID)
 	}
 

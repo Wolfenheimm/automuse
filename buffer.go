@@ -22,6 +22,7 @@ type BufferManager struct {
 	session       *discordgo.Session
 	channelID     string
 	isActive      bool
+	stopChan      chan struct{} // Channel to signal goroutine shutdown
 }
 
 // NewBufferManager creates a new buffer manager
@@ -31,6 +32,7 @@ func NewBufferManager(maxBuffer int) *BufferManager {
 		downloading:   make(map[string]bool),
 		maxBuffer:     maxBuffer,
 		isActive:      false,
+		stopChan:      make(chan struct{}),
 	}
 }
 
@@ -54,7 +56,17 @@ func (bm *BufferManager) StopBuffering() {
 	bm.mutex.Lock()
 	defer bm.mutex.Unlock()
 
-	bm.isActive = false
+	if bm.isActive {
+		bm.isActive = false
+
+		// Signal shutdown to maintenance goroutine
+		select {
+		case bm.stopChan <- struct{}{}:
+		default:
+			// Channel might be full or closed, that's okay
+		}
+	}
+
 	bm.downloadQueue = make([]Song, 0)
 	bm.downloading = make(map[string]bool)
 
@@ -155,48 +167,54 @@ func (bm *BufferManager) maintainBuffer() {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		bm.mutex.RLock()
-		if !bm.isActive {
-			bm.mutex.RUnlock()
+	for {
+		select {
+		case <-bm.stopChan:
+			log.Printf("INFO: Buffer maintenance goroutine shutting down")
 			return
-		}
-
-		// Check which songs in the buffer need downloading
-		var songsToDownload []Song
-		for _, song := range bm.downloadQueue {
-			// Skip if already cached
-			if metadataManager.HasSong(song.VidID) {
-				continue
+		case <-ticker.C:
+			bm.mutex.RLock()
+			if !bm.isActive {
+				bm.mutex.RUnlock()
+				return
 			}
 
-			// Skip if currently downloading
-			if bm.downloading[song.VidID] {
-				continue
+			// Check which songs in the buffer need downloading
+			var songsToDownload []Song
+			for _, song := range bm.downloadQueue {
+				// Skip if already cached
+				if metadataManager.HasSong(song.VidID) {
+					continue
+				}
+
+				// Skip if currently downloading
+				if bm.downloading[song.VidID] {
+					continue
+				}
+
+				songsToDownload = append(songsToDownload, song)
 			}
+			bm.mutex.RUnlock()
 
-			songsToDownload = append(songsToDownload, song)
-		}
-		bm.mutex.RUnlock()
+			// Download songs that need downloading (limit concurrent downloads)
+			if len(songsToDownload) > 0 {
+				for _, song := range songsToDownload[:min(4, len(songsToDownload))] {
+					go func(s Song) {
+						bm.mutex.Lock()
+						bm.downloading[s.VidID] = true
+						bm.mutex.Unlock()
 
-		// Download songs that need downloading (limit concurrent downloads)
-		if len(songsToDownload) > 0 {
-			for _, song := range songsToDownload[:min(4, len(songsToDownload))] {
-				go func(s Song) {
-					bm.mutex.Lock()
-					bm.downloading[s.VidID] = true
-					bm.mutex.Unlock()
+						success := bm.downloadSong(s, 0, 0) // 0 index means background download
 
-					success := bm.downloadSong(s, 0, 0) // 0 index means background download
+						bm.mutex.Lock()
+						delete(bm.downloading, s.VidID)
+						bm.mutex.Unlock()
 
-					bm.mutex.Lock()
-					delete(bm.downloading, s.VidID)
-					bm.mutex.Unlock()
-
-					if success {
-						log.Printf("INFO: Background buffer download completed: %s", s.Title)
-					}
-				}(song)
+						if success {
+							log.Printf("INFO: Background buffer download completed: %s", s.Title)
+						}
+					}(song)
+				}
 			}
 		}
 	}

@@ -417,7 +417,7 @@ func playFromQueue(input int, m *discordgo.MessageCreate) {
 // Prepares queue display
 func prepDisplayQueue(commData []string, queueLenBefore int, m *discordgo.MessageCreate) {
 	// Don't show error messages if stop was recently requested
-	if stopRequested {
+	if isStopRequested() {
 		log.Printf("[DEBUG] prepDisplayQueue skipped - stop was recently requested")
 		return
 	}
@@ -439,8 +439,8 @@ func prepDisplayQueue(commData []string, queueLenBefore int, m *discordgo.Messag
 
 		// Only show error message if we're actually trying to add content
 		// Skip if this seems to be an end-of-queue or stop scenario
-		// TODO: stopRequested is not doing its intended job here and might be due to threading
-		if !stopRequested && len(commData) > 1 && (strings.Contains(commData[1], "http") || len(commData[1]) > 3) {
+		// FIXED: Using thread-safe stopRequested access to prevent race conditions
+		if !isStopRequested() && len(commData) > 1 && (strings.Contains(commData[1], "http") || len(commData[1]) > 3) {
 			log.Printf("[DEBUG] Showing 'nothing added' message for command: %v", commData)
 			nothingAddedMessage := "**[Muse]** Nothing was added, playlist or song was empty...\n"
 			nothingAddedMessage = nothingAddedMessage + "Note:\n"

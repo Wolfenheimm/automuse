@@ -105,6 +105,14 @@ func (mm *MetadataManager) saveMetadataUnsafe() error {
 
 // AddSong adds or updates song metadata
 func (mm *MetadataManager) AddSong(videoID, title, duration, filePath string, fileSize int64) error {
+	start := time.Now()
+	defer func() {
+		elapsed := time.Since(start)
+		if elapsed > 100*time.Millisecond {
+			log.Printf("PERF: AddSong took %v for %s", elapsed, title)
+		}
+	}()
+
 	mm.mutex.Lock()
 	defer mm.mutex.Unlock()
 
