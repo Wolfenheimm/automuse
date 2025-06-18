@@ -19,6 +19,8 @@ var (
 	searchRequested bool
 	stopRequested   bool         // Flag to prevent queue processing after stop command
 	stopMutex       sync.RWMutex // Mutex for thread-safe stopRequested access
+	playbackEnding  bool         // Flag to indicate playback is ending naturally
+	playbackMutex   sync.RWMutex // Mutex for thread-safe playbackEnding access
 	service         *youtube.Service
 	s               *discordgo.Session
 	v               = new(VoiceInstance)
@@ -104,4 +106,17 @@ func isStopRequested() bool {
 	stopMutex.RLock()
 	defer stopMutex.RUnlock()
 	return stopRequested
+}
+
+// Thread-safe functions for playbackEnding flag
+func setPlaybackEnding(value bool) {
+	playbackMutex.Lock()
+	defer playbackMutex.Unlock()
+	playbackEnding = value
+}
+
+func isPlaybackEnding() bool {
+	playbackMutex.RLock()
+	defer playbackMutex.RUnlock()
+	return playbackEnding
 }

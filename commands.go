@@ -59,7 +59,7 @@ func queueSong(m *discordgo.MessageCreate) {
 			return
 		}
 		prepFirstSongEntered(m, false)
-	} else if !searchRequested && !isStopRequested() {
+	} else if !searchRequested && !isStopRequested() && !isPlaybackEnding() {
 		prepDisplayQueue(commData, queueLenBefore, m)
 	}
 }
@@ -108,6 +108,7 @@ func queueStuff(m *discordgo.MessageCreate) {
 
 // Stops current song and empties the queue
 func stop(m *discordgo.MessageCreate) {
+	setPlaybackEnding(true) // Set flag to prevent inappropriate error messages
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Stopping ["+v.nowPlaying.Title+"] & Clearing Queue :octagonal_sign:")
 	v.stop = true
 	queue = []Song{}
@@ -127,6 +128,12 @@ func stop(m *discordgo.MessageCreate) {
 
 	// Reset the stop flag after everything has stopped
 	setStopRequested(false)
+
+	// Reset the playback ending flag after a short delay
+	go func() {
+		time.Sleep(2 * time.Second)
+		setPlaybackEnding(false)
+	}()
 }
 
 // Skips the current song

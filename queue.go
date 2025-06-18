@@ -166,6 +166,7 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 	}
 
 	// No more songs in the queue, reset and disconnect voice
+	setPlaybackEnding(true) // Set flag to prevent inappropriate error messages
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Nothing left to play, peace! :v:")
 	v.stop = true
 	v.nowPlaying = Song{}
@@ -188,6 +189,12 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 	if v.encoder != nil {
 		v.encoder.Cleanup()
 	}
+
+	// Reset the playback ending flag after a short delay
+	go func() {
+		time.Sleep(2 * time.Second)
+		setPlaybackEnding(false)
+	}()
 }
 
 // queueSingleSong fetches metadata and queues a single video
@@ -416,9 +423,9 @@ func playFromQueue(input int, m *discordgo.MessageCreate) {
 
 // Prepares queue display
 func prepDisplayQueue(commData []string, queueLenBefore int, m *discordgo.MessageCreate) {
-	// Don't show error messages if stop was recently requested
-	if isStopRequested() {
-		log.Printf("[DEBUG] prepDisplayQueue skipped - stop was recently requested")
+	// Don't show error messages if stop was recently requested or playback is ending
+	if isStopRequested() || isPlaybackEnding() {
+		log.Printf("[DEBUG] prepDisplayQueue skipped - stop requested: %t, playback ending: %t", isStopRequested(), isPlaybackEnding())
 		return
 	}
 
@@ -428,29 +435,52 @@ func prepDisplayQueue(commData []string, queueLenBefore int, m *discordgo.Messag
 	// Only display queue if it grew in size...
 	if queueLenBefore < len(queue) {
 		displayQueue(m)
-	} else {
-		// Check if this is a numeric input (search result selection)
-		if len(commData) > 1 {
-			if _, err := strconv.Atoi(commData[1]); err == nil {
-				log.Printf("[DEBUG] Skipping error message - detected numeric input: %s", commData[1])
-				return
-			}
+		return
+	}
+
+	// Don't show error messages for certain commands that shouldn't trigger them
+	if len(commData) > 0 {
+		firstCommand := strings.ToLower(commData[0])
+		if firstCommand == "stop" || firstCommand == "skip" || firstCommand == "queue" {
+			log.Printf("[DEBUG] Skipping error message for %s command", firstCommand)
+			return
+		}
+	}
+
+	// Check if this is a numeric input (search result selection)
+	if len(commData) > 1 {
+		if _, err := strconv.Atoi(commData[1]); err == nil {
+			log.Printf("[DEBUG] Skipping error message - detected numeric input: %s", commData[1])
+			return
+		}
+	}
+
+	// Check if we're currently playing something - if so, we're likely not in an error state
+	if v.nowPlaying != (Song{}) {
+		log.Printf("[DEBUG] Skipping error message - something is currently playing")
+		return
+	}
+
+	// Only show error message if we're actually trying to add content
+	// Skip if this seems to be an end-of-queue or stop scenario
+	// FIXED: Using thread-safe stopRequested access to prevent race conditions
+	if !isStopRequested() && !isPlaybackEnding() && len(commData) > 1 && (strings.Contains(commData[1], "http") || len(commData[1]) > 3) {
+		// Additional check: don't show error if the command looks like it might be successful later
+		// (e.g., during playlist processing)
+		if strings.Contains(commData[1], "playlist") || strings.Contains(commData[1], "list=") {
+			log.Printf("[DEBUG] Skipping error message - appears to be playlist processing")
+			return
 		}
 
-		// Only show error message if we're actually trying to add content
-		// Skip if this seems to be an end-of-queue or stop scenario
-		// FIXED: Using thread-safe stopRequested access to prevent race conditions
-		if !isStopRequested() && len(commData) > 1 && (strings.Contains(commData[1], "http") || len(commData[1]) > 3) {
-			log.Printf("[DEBUG] Showing 'nothing added' message for command: %v", commData)
-			nothingAddedMessage := "**[Muse]** Nothing was added, playlist or song was empty...\n"
-			nothingAddedMessage = nothingAddedMessage + "Note:\n"
-			nothingAddedMessage = nothingAddedMessage + "- Playlists should have the following url structure: <https://www.youtube.com/playlist?list=><PLAYLIST IDENTIFIER>\n"
-			nothingAddedMessage = nothingAddedMessage + "- Videos should have the following url structure: <https://www.youtube.com/watch?v=><VIDEO IDENTIFIER>\n"
-			nothingAddedMessage = nothingAddedMessage + "- Youtu.be links or links set at a certain time (t=#s) have not been implemented - sorry!"
-			s.ChannelMessageSend(m.ChannelID, nothingAddedMessage)
-		} else {
-			log.Printf("[DEBUG] Skipping error message - command doesn't seem to be adding content: %v", commData)
-		}
+		log.Printf("[DEBUG] Showing 'nothing added' message for command: %v", commData)
+		nothingAddedMessage := "**[Muse]** Nothing was added, playlist or song was empty...\n"
+		nothingAddedMessage = nothingAddedMessage + "Note:\n"
+		nothingAddedMessage = nothingAddedMessage + "- Playlists should have the following url structure: <https://www.youtube.com/playlist?list=><PLAYLIST IDENTIFIER>\n"
+		nothingAddedMessage = nothingAddedMessage + "- Videos should have the following url structure: <https://www.youtube.com/watch?v=><VIDEO IDENTIFIER>\n"
+		nothingAddedMessage = nothingAddedMessage + "- Youtu.be links or links set at a certain time (t=#s) have not been implemented - sorry!"
+		s.ChannelMessageSend(m.ChannelID, nothingAddedMessage)
+	} else {
+		log.Printf("[DEBUG] Skipping error message - command doesn't seem to be adding content: %v", commData)
 	}
 }
 
