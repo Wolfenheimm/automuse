@@ -376,6 +376,20 @@ func (sq *ShuffleQueueCommand) Handle(s *discordgo.Session, m *discordgo.Message
 	return nil
 }
 
+type EmergencyResetCommand struct{}
+
+func (er *EmergencyResetCommand) CanHandle(content string) bool {
+	return content == "emergency-reset" || content == "reset"
+}
+func (er *EmergencyResetCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
+	// Only allow certain users to use emergency reset (you can modify this check)
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		emergencyResetCommand(s, m)
+	}()
+	return nil
+}
+
 var commandHandlers = []CommandHandler{
 	&PlayHelpCommand{}, // Check specific play commands first
 	&PlayStuffCommand{},
@@ -390,6 +404,7 @@ var commandHandlers = []CommandHandler{
 	&BufferStatusCommand{},
 	&MoveQueueCommand{},
 	&ShuffleQueueCommand{},
+	&EmergencyResetCommand{}, // Add emergency reset command
 }
 
 func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {

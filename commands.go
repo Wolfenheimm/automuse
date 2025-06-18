@@ -12,10 +12,36 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+// Helper function for minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // Get & queue audio in a YouTube video / playlist
 func queueSong(m *discordgo.MessageCreate) {
 	// Prevent queue processing if stop was recently requested
 	if isStopRequested() {
+		return
+	}
+
+	// Check user rate limiting for heavy operations
+	if !checkUserRateLimit(m.Author.ID) {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** ⏳ Please wait a moment before adding more content. (Rate limited)")
+		log.Printf("WARN: User %s rate limited", m.Author.ID)
+		return
+	}
+
+	// Check if queue is getting too large
+	queueMutex.Lock()
+	currentQueueSize := len(queue)
+	queueMutex.Unlock()
+
+	if currentQueueSize >= maxQueueSize {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** 🚫 Queue is full! Maximum size is %d songs. Please wait for some songs to finish.", maxQueueSize))
+		log.Printf("WARN: Queue at maximum capacity (%d songs), rejecting new addition", currentQueueSize)
 		return
 	}
 
@@ -39,6 +65,7 @@ func queueSong(m *discordgo.MessageCreate) {
 		// Check if the link is a playlist or a simple video
 		if strings.Contains(m.Content, "list") && strings.Contains(m.Content, "-pl") || strings.Contains(m.Content, "/playlist?") {
 			prepPlaylistCommand(commData, m)
+			playbackAlreadyStarted = true // Playlist processing handles its own queue display
 		} else if strings.Contains(m.Content, "watch") && !strings.Contains(m.Content, "-pl") {
 			playbackAlreadyStarted = prepWatchCommand(commData, m)
 		}
@@ -59,7 +86,7 @@ func queueSong(m *discordgo.MessageCreate) {
 			return
 		}
 		prepFirstSongEntered(m, false)
-	} else if !searchRequested && !isStopRequested() && !isPlaybackEnding() {
+	} else if !playbackAlreadyStarted && !searchRequested && !isStopRequested() && !isPlaybackEnding() {
 		prepDisplayQueue(commData, queueLenBefore, m)
 	}
 }
@@ -108,11 +135,30 @@ func queueStuff(m *discordgo.MessageCreate) {
 
 // Stops current song and empties the queue
 func stop(m *discordgo.MessageCreate) {
+	// **COMMAND DEDUPLICATION** - Prevent duplicate stop commands
+	if isCommandActive(m.Author.ID, "stop") {
+		log.Printf("WARN: Stop command blocked - already processing for user %s", m.Author.ID)
+		return
+	}
+
+	setCommandActive(m.Author.ID, "stop")
+	defer clearCommandActive(m.Author.ID, "stop")
+
 	setPlaybackEnding(true) // Set flag to prevent inappropriate error messages
+
+	// Emergency cleanup for any stuck processes
+	emergencyCleanup()
+
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Stopping ["+v.nowPlaying.Title+"] & Clearing Queue :octagonal_sign:")
 	v.stop = true
+
+	// Clear queue and reset all processing flags
+	queueMutex.Lock()
 	queue = []Song{}
-	setStopRequested(true) // Set flag to prevent additional queue processing
+	queueMutex.Unlock()
+
+	setStopRequested(true)       // Set flag to prevent additional queue processing
+	setPlaylistProcessing(false) // Force reset playlist processing flag
 	resetSearch()
 
 	// Stop buffer manager
@@ -136,8 +182,54 @@ func stop(m *discordgo.MessageCreate) {
 	}()
 }
 
+// emergencyCleanup forcefully resets all state in case of system overload
+func emergencyCleanup() {
+	log.Printf("INFO: Performing emergency cleanup")
+
+	// Reset all processing flags
+	setPlaylistProcessing(false)
+	setStopRequested(false)
+	setPlaybackEnding(false)
+	setPlaybackState(false) // Reset playback state
+
+	// Clear any rate limiting
+	userRateMutex.Lock()
+	userRateLimit = make(map[string]time.Time)
+	userRateMutex.Unlock()
+
+	// Reset last playlist time to allow immediate processing if needed
+	playlistMutex.Lock()
+	lastPlaylistTime = time.Time{}
+	playlistMutex.Unlock()
+
+	// Drain playlist semaphore in case it's blocked
+	select {
+	case <-playlistSemaphore:
+		log.Printf("INFO: Drained blocked semaphore during emergency cleanup")
+	default:
+		// No semaphore to drain
+	}
+
+	// Clear all active command locks
+	commandMutex.Lock()
+	activeCommands = make(map[string]time.Time)
+	commandMutex.Unlock()
+	log.Printf("INFO: Cleared all active command locks")
+
+	log.Printf("INFO: Emergency cleanup completed")
+}
+
 // Skips the current song
 func skip(m *discordgo.MessageCreate) {
+	// **COMMAND DEDUPLICATION** - Prevent duplicate skip commands
+	if isCommandActive(m.Author.ID, "skip") {
+		log.Printf("WARN: Skip command blocked - already processing for user %s", m.Author.ID)
+		return
+	}
+
+	setCommandActive(m.Author.ID, "skip")
+	defer clearCommandActive(m.Author.ID, "skip")
+
 	// Check if skipping current song or skipping to another song
 	if m.Content == "skip" {
 		if v.nowPlaying == (Song{}) {
@@ -236,22 +328,105 @@ func skip(m *discordgo.MessageCreate) {
 
 // Fetches and displays the queue
 func displayQueue(m *discordgo.MessageCreate) {
+	// **COMMAND DEDUPLICATION** - Prevent duplicate queue displays
+	if isCommandActive(m.Author.ID, "queue") {
+		log.Printf("WARN: Queue command blocked - already processing for user %s", m.Author.ID)
+		return
+	}
+
+	setCommandActive(m.Author.ID, "queue")
+	defer clearCommandActive(m.Author.ID, "queue")
+
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Fetching Queue...")
-	queueList := ":musical_note:   QUEUE LIST   :musical_note:\n"
+
+	// Thread-safe queue access
+	queueMutex.Lock()
+	queueCopy := make([]Song, len(queue))
+	copy(queueCopy, queue)
+	queueMutex.Unlock()
+
+	// Always show complete queue with proper pagination
 	if v.nowPlaying != (Song{}) {
-		queueList = queueList + "Now Playing: " + v.nowPlaying.Title + "  ->  Queued by <@" + v.nowPlaying.User + "> \n"
-		for index, element := range queue {
-			queueList = queueList + " " + strconv.Itoa(index+1) + ". " + element.Title + "  ->  Queued by <@" + element.User + "> \n"
-			if index+1 == 14 {
-				log.Println(queueList)
-				s.ChannelMessageSend(m.ChannelID, queueList)
-				queueList = ""
-			}
+		// Build header with now playing
+		queueList := ":musical_note:   QUEUE LIST   :musical_note:\n"
+		queueList += "Now Playing: " + v.nowPlaying.Title + "  ->  Queued by <@" + v.nowPlaying.User + "> \n \n"
+
+		// Add queue count info
+		if len(queueCopy) > 0 {
+			queueList += fmt.Sprintf("**Upcoming Songs (%d in queue):**\n", len(queueCopy))
 		}
+
+		log.Printf("Queue display: Starting with %d songs, header length: %d chars", len(queueCopy), len(queueList))
+
+		// Process queue with very aggressive pagination to prevent ANY truncation
+		const maxMessageLength = 1000 // Very conservative limit to prevent Discord truncation
+		const maxSongsPerMessage = 10 // Force pagination every 10 songs regardless of length
+		currentMessage := queueList
+		songsSentInThisMessage := 0
+
+		for index, element := range queueCopy {
+			songLine := fmt.Sprintf("%d. %s  ->  Queued by <@%s>\n", index+1, element.Title, element.User)
+
+			// Check if we need pagination (either too long OR too many songs)
+			if len(currentMessage)+len(songLine) > maxMessageLength || songsSentInThisMessage >= maxSongsPerMessage {
+				// Send current message
+				s.ChannelMessageSend(m.ChannelID, currentMessage)
+
+				// Start fresh message for continuation (no header, just songs)
+				currentMessage = ""
+				songsSentInThisMessage = 0
+			}
+
+			// Add the song to current message
+			currentMessage += songLine
+			songsSentInThisMessage++
+		}
+
+		// Send the final message (or only message if queue is small)
+		if len(currentMessage) > 0 {
+			s.ChannelMessageSend(m.ChannelID, currentMessage)
+		}
+
+	} else if len(queueCopy) == 0 {
+		// No song playing and no queue
+		queueList := ":musical_note:   QUEUE LIST   :musical_note:\n"
+		queueList += "**Nothing is currently playing and the queue is empty.** :sleeping:\n"
+		queueList += "Use `play [song/URL]` to add music to the queue!"
 		s.ChannelMessageSend(m.ChannelID, queueList)
-		log.Println(queueList)
 	} else {
-		s.ChannelMessageSend(m.ChannelID, queueList)
+		// There are songs in queue but nothing is currently playing
+		queueList := ":musical_note:   QUEUE LIST   :musical_note:\n"
+		queueList += "**Nothing is currently playing**\n\n"
+		queueList += fmt.Sprintf("**Queue (%d songs):**\n", len(queueCopy))
+
+		// Process queue with pagination
+		const maxMessageLength = 1000
+		const maxSongsPerMessage = 10
+		currentMessage := queueList
+		songsSentInThisMessage := 0
+
+		for index, element := range queueCopy {
+			songLine := fmt.Sprintf("%d. %s  ->  Queued by <@%s>\n", index+1, element.Title, element.User)
+
+			// Check if we need pagination
+			if len(currentMessage)+len(songLine) > maxMessageLength || songsSentInThisMessage >= maxSongsPerMessage {
+				// Send current message
+				s.ChannelMessageSend(m.ChannelID, currentMessage)
+
+				// Start fresh message for continuation (no header, just songs)
+				currentMessage = ""
+				songsSentInThisMessage = 0
+			}
+
+			// Add the song to current message
+			currentMessage += songLine
+			songsSentInThisMessage++
+		}
+
+		// Send the final message
+		if len(currentMessage) > 0 {
+			s.ChannelMessageSend(m.ChannelID, currentMessage)
+		}
 	}
 }
 
@@ -300,6 +475,14 @@ func showHelp(m *discordgo.MessageCreate) {
 	helpMessage += "`cache` - Show cache statistics and information\n"
 	helpMessage += "`cache-clear` - Clear old cached songs (older than 7 days)\n"
 	helpMessage += "`buffer-status` - Show buffer manager status and download queue\n\n"
+	helpMessage += ":gear: **SYSTEM COMMANDS** :gear:\n"
+	helpMessage += "`emergency-reset` or `reset` - Emergency reset if bot gets stuck\n\n"
+	helpMessage += ":shield: **RATE LIMITING & PROTECTION** :shield:\n"
+	helpMessage += "• **Playlist Cooldown**: 5 seconds between playlists\n"
+	helpMessage += "• **User Rate Limiting**: 3 seconds between commands per user\n"
+	helpMessage += "• **Max Queue Size**: 500 songs total\n"
+	helpMessage += "• **Max Playlist Size**: 100 songs per playlist\n"
+	helpMessage += "• **Concurrent Playlists**: Only 1 playlist can be processed at a time\n\n"
 	helpMessage += ":gear: **SUPPORTED FORMATS** :gear:\n"
 	helpMessage += "• YouTube videos: `https://www.youtube.com/watch?v=...`\n"
 	helpMessage += "• YouTube playlists: `https://www.youtube.com/playlist?list=...`\n"
@@ -483,4 +666,47 @@ func shuffleQueueCommand(s *discordgo.Session, m *discordgo.MessageCreate, args 
 	}
 
 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** :twisted_rightwards_arrows: Shuffled %d songs in the queue!", len(queue)))
+}
+
+func emergencyResetCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** 🚨 **EMERGENCY RESET** - Clearing all processes and resetting bot state...")
+
+	// Force stop everything
+	v.stop = true
+
+	// Disconnect voice immediately
+	if v.voice != nil {
+		v.voice.Disconnect()
+		v.voice = nil
+	}
+
+	// Emergency cleanup
+	emergencyCleanup()
+
+	// Clear everything
+	queueMutex.Lock()
+	queue = []Song{}
+	queueMutex.Unlock()
+
+	v.nowPlaying = Song{}
+
+	// Stop buffer manager
+	bufferManager.StopBuffering()
+
+	// Clean up encoder
+	if v.encoder != nil {
+		v.encoder.Cleanup()
+		v.encoder = nil
+	}
+
+	// Force drain playlist semaphore
+	select {
+	case <-playlistSemaphore:
+		// Drained one
+	default:
+		// Nothing to drain
+	}
+
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** ✅ Emergency reset completed. Bot should be responsive now.")
+	log.Printf("INFO: Emergency reset performed by user %s", m.Author.ID)
 }

@@ -16,6 +16,12 @@ import (
 // - It will play the queue until it's empty
 // - If the queue is empty, it will leave the voice channel
 func playQueue(m *discordgo.MessageCreate, isManual bool) {
+	// Prevent multiple simultaneous playQueue calls
+	if v.nowPlaying != (Song{}) {
+		log.Printf("WARN: playQueue called while already playing: %s", v.nowPlaying.Title)
+		return
+	}
+
 	// Pre-download first 3 songs before starting playback
 	queueMutex.Lock()
 	initialQueue := make([]Song, len(queue))
@@ -194,6 +200,7 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 	go func() {
 		time.Sleep(2 * time.Second)
 		setPlaybackEnding(false)
+		setPlaybackState(false) // Reset playback state when queue finishes
 	}()
 }
 
@@ -432,8 +439,9 @@ func prepDisplayQueue(commData []string, queueLenBefore int, m *discordgo.Messag
 	// Debug logging to understand when this function is called inappropriately
 	log.Printf("[DEBUG] prepDisplayQueue called: commData=%v, queueLenBefore=%d, currentQueueLen=%d", commData, queueLenBefore, len(queue))
 
-	// Only display queue if it grew in size...
+	// Display queue if it grew in size (new items added)
 	if queueLenBefore < len(queue) {
+		log.Printf("[DEBUG] Queue grew from %d to %d, displaying updated queue", queueLenBefore, len(queue))
 		displayQueue(m)
 		return
 	}
@@ -545,6 +553,27 @@ func queueWithYtDlp(m *discordgo.MessageCreate, link string) bool {
 // queuePlaylistThreaded processes playlists by downloading all songs first
 // then starting playback once everything is ready
 func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
+	// Check user-specific cooldown to prevent spam
+	userKey := m.Author.ID + ":playlist"
+	if isCommandActive(userKey, "playlist") {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** ⏳ Please wait a moment before adding another playlist. (User rate limit)")
+		log.Printf("WARN: Playlist processing rejected - user %s rate limited", m.Author.ID)
+		return
+	}
+	setCommandActive(userKey, "playlist")
+	defer clearCommandActive(userKey, "playlist")
+
+	// Acquire playlist processing semaphore with timeout
+	select {
+	case playlistSemaphore <- struct{}{}:
+		// Got the semaphore, proceed
+		defer func() { <-playlistSemaphore }()
+	case <-time.After(5 * time.Second): // Add timeout to prevent hanging
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** 🚫 Playlist processing system is at capacity. Please try again in a moment.")
+		log.Printf("WARN: Playlist processing rejected - semaphore timeout (system at capacity)")
+		return
+	}
+
 	log.Printf("INFO: Starting threaded playlist processing for: %s", playlistID)
 
 	var allVideoIds []string
@@ -571,15 +600,33 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 		return
 	}
 
+	// Check if playlist is too large
+	if len(allVideoIds) > 100 {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** 🚫 Playlist too large! (%d songs). Maximum allowed is 100 songs to prevent system overload.", len(allVideoIds)))
+		log.Printf("WARN: Playlist rejected - too large (%d songs)", len(allVideoIds))
+		return
+	}
+
+	// Check if adding this playlist would exceed queue limit
+	queueMutex.Lock()
+	currentQueueSize := len(queue)
+	queueMutex.Unlock()
+
+	if currentQueueSize+len(allVideoIds) > maxQueueSize {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** 🚫 Adding this playlist (%d songs) would exceed the maximum queue size (%d). Current queue: %d songs.", len(allVideoIds), maxQueueSize, currentQueueSize))
+		log.Printf("WARN: Playlist rejected - would exceed queue limit")
+		return
+	}
+
 	log.Printf("INFO: Found %d videos in playlist", len(allVideoIds))
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Found %d videos! Processing all songs before starting playback...", len(allVideoIds)))
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Found %d videos! Processing playlist (this may take a moment)... ⏳", len(allVideoIds)))
 
 	// Process all videos and queue them before starting playback
 	songsProcessed := 0
 	successfullyQueued := 0
 
-	// Use a semaphore to limit concurrent processing
-	maxConcurrent := 3
+	// Reduced concurrent processing to prevent overwhelming
+	maxConcurrent := 2 // Reduced from 3 to 2 for better stability
 	semaphore := make(chan struct{}, maxConcurrent)
 
 	// Structure to hold results with their original index
@@ -594,6 +641,13 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 
 	// Process all videos in parallel
 	for i, videoId := range allVideoIds {
+		// Check if we should stop processing (user might have stopped)
+		if isStopRequested() || isPlaybackEnding() {
+			log.Printf("INFO: Stopping playlist processing due to stop request")
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Playlist processing stopped.")
+			return
+		}
+
 		semaphore <- struct{}{} // Acquire semaphore
 
 		go func(videoId string, index int) {
@@ -629,23 +683,34 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 		}(videoId, i)
 	}
 
-	// Collect all results
+	// Collect all results with timeout protection
 	results := make([]processResult, len(allVideoIds))
+	timeout := time.NewTimer(5 * time.Minute) // 5 minute timeout for playlist processing
+	defer timeout.Stop()
+
 	for i := 0; i < len(allVideoIds); i++ {
-		result := <-resultChan
-		results[result.index] = result
-		songsProcessed++
+		select {
+		case result := <-resultChan:
+			results[result.index] = result
+			songsProcessed++
 
-		if result.success {
-			successfullyQueued++
-		}
+			if result.success {
+				successfullyQueued++
+			}
 
-		// Send progress updates
-		if songsProcessed%5 == 0 || songsProcessed == len(allVideoIds) {
-			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Processed %d/%d songs from playlist :musical_note:", songsProcessed, len(allVideoIds)))
+			// Send progress updates less frequently to avoid spam
+			if songsProcessed%10 == 0 || songsProcessed == len(allVideoIds) {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Processed %d/%d songs from playlist... 🎵", songsProcessed, len(allVideoIds)))
+			}
+
+		case <-timeout.C:
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** ⏰ Playlist processing timed out. Some songs may not have been added.")
+			log.Printf("ERROR: Playlist processing timed out after 5 minutes")
+			goto processResults
 		}
 	}
 
+processResults:
 	log.Printf("INFO: Playlist processing complete. Successfully queued %d/%d songs", successfullyQueued, len(allVideoIds))
 
 	if successfullyQueued == 0 {
@@ -663,13 +728,26 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 	queueMutex.Unlock()
 
 	// Now start playback with all songs queued
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** All songs ready! Starting playlist with %d songs :musical_note:", successfullyQueued))
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** ✅ Playlist ready! Added %d songs to queue. 🎵", successfullyQueued))
 
-	// Start playback if nothing is currently playing
-	if v.nowPlaying == (Song{}) && len(queue) >= 1 {
-		log.Printf("INFO: Starting playback for playlist with %d songs", len(queue))
+	// **ALWAYS SHOW COMPLETE QUEUE** after playlist processing
+	log.Printf("INFO: Displaying complete queue after playlist processing")
+	displayQueue(m)
+
+	// **SMART PLAYBACK MANAGEMENT** - Start playback only if nothing is playing
+	queueMutex.Lock()
+	currentQueueSize = len(queue)
+	queueMutex.Unlock()
+
+	if v.nowPlaying == (Song{}) && currentQueueSize >= 1 && !getPlaybackState() {
+		// Nothing is playing, start playback
+		log.Printf("INFO: Starting playback for playlist with %d songs", currentQueueSize)
 		joinVoiceChannel()
 		prepFirstSongEntered(m, false)
+	} else if getPlaybackState() || v.nowPlaying != (Song{}) {
+		// Something is already playing, just notify that songs were added
+		log.Printf("INFO: Playback already in progress, playlist songs added to queue")
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** ✅ Playlist added to queue! Songs will play after current music. 🎵")
 	}
 
 	log.Printf("INFO: Threaded playlist processing completed for %d videos", len(allVideoIds))

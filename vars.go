@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"sync"
+	"time"
 
 	"log"
 
@@ -21,6 +22,26 @@ var (
 	stopMutex       sync.RWMutex // Mutex for thread-safe stopRequested access
 	playbackEnding  bool         // Flag to indicate playback is ending naturally
 	playbackMutex   sync.RWMutex // Mutex for thread-safe playbackEnding access
+
+	// Rate limiting and resource management
+	playlistProcessing     bool                         // Flag to indicate playlist processing is active
+	playlistMutex          sync.RWMutex                 // Mutex for playlist processing flag
+	lastPlaylistTime       time.Time                    // Last time a playlist was processed
+	playlistCooldown       = 5 * time.Second            // Minimum time between playlist commands
+	maxConcurrentPlaylists = 3                          // Maximum number of playlists that can be processed simultaneously
+	playlistSemaphore      chan struct{}                // Semaphore to limit concurrent playlist processing
+	userRateLimit          = make(map[string]time.Time) // Per-user rate limiting
+	userRateMutex          sync.RWMutex                 // Mutex for user rate limiting
+	maxQueueSize           = 500                        // Maximum total queue size to prevent memory issues
+
+	// Playback state protection - prevent multiple simultaneous playback
+	isPlaying          bool
+	playbackStateMutex sync.RWMutex
+
+	// Command deduplication to prevent duplicate command processing
+	activeCommands map[string]time.Time // Track active commands by user+command
+	commandMutex   sync.RWMutex         // Mutex for command tracking
+
 	service         *youtube.Service
 	s               *discordgo.Session
 	v               = new(VoiceInstance)
@@ -53,6 +74,12 @@ const (
 	DefaultCompressionLevel = 5 // Balanced compression (0-10 scale)
 	DefaultPacketLoss       = 1 // Packet loss compensation
 )
+
+// Initialize rate limiting resources
+func init() {
+	playlistSemaphore = make(chan struct{}, maxConcurrentPlaylists)
+	activeCommands = make(map[string]time.Time)
+}
 
 // Sets up the DCA encoder options with safe parameters
 func init() {
@@ -119,4 +146,105 @@ func isPlaybackEnding() bool {
 	playbackMutex.RLock()
 	defer playbackMutex.RUnlock()
 	return playbackEnding
+}
+
+// Thread-safe functions for playlist processing management
+func setPlaylistProcessing(value bool) {
+	playlistMutex.Lock()
+	defer playlistMutex.Unlock()
+	playlistProcessing = value
+	if value {
+		lastPlaylistTime = time.Now()
+	}
+}
+
+func isPlaylistProcessing() bool {
+	playlistMutex.RLock()
+	defer playlistMutex.RUnlock()
+	return playlistProcessing
+}
+
+func canProcessPlaylist() bool {
+	playlistMutex.RLock()
+	defer playlistMutex.RUnlock()
+	return time.Since(lastPlaylistTime) >= playlistCooldown
+}
+
+// Per-user rate limiting
+func checkUserRateLimit(userID string) bool {
+	userRateMutex.Lock()
+	defer userRateMutex.Unlock()
+
+	lastTime, exists := userRateLimit[userID]
+	if !exists || time.Since(lastTime) >= 3*time.Second {
+		userRateLimit[userID] = time.Now()
+		return true
+	}
+	return false
+}
+
+// Thread-safe functions for playback state management
+func setPlaybackState(playing bool) {
+	playbackStateMutex.Lock()
+	defer playbackStateMutex.Unlock()
+	isPlaying = playing
+}
+
+func getPlaybackState() bool {
+	playbackStateMutex.RLock()
+	defer playbackStateMutex.RUnlock()
+	return isPlaying
+}
+
+// Command deduplication to prevent duplicate processing
+func isCommandActive(userID, command string) bool {
+	commandMutex.RLock()
+	defer commandMutex.RUnlock()
+
+	key := userID + ":" + command
+	lastTime, exists := activeCommands[key]
+	if !exists {
+		return false
+	}
+
+	// Playlist commands have longer timeout due to processing time
+	if command == "playlist" {
+		return time.Since(lastTime) < 10*time.Second
+	}
+
+	// Regular commands have shorter timeout
+	return time.Since(lastTime) < 2*time.Second
+}
+
+func setCommandActive(userID, command string) {
+	commandMutex.Lock()
+	defer commandMutex.Unlock()
+
+	key := userID + ":" + command
+	activeCommands[key] = time.Now()
+}
+
+func clearCommandActive(userID, command string) {
+	commandMutex.Lock()
+	defer commandMutex.Unlock()
+
+	key := userID + ":" + command
+	delete(activeCommands, key)
+}
+
+// Atomic playlist processing protection - returns true if successfully acquired, false if already processing
+func atomicSetPlaylistProcessing(value bool) bool {
+	playlistMutex.Lock()
+	defer playlistMutex.Unlock()
+
+	if value && playlistProcessing {
+		// Someone else is already processing
+		return false
+	}
+
+	playlistProcessing = value
+	if value {
+		lastPlaylistTime = time.Now()
+	}
+	return true
 }

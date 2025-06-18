@@ -145,6 +145,17 @@ func prepWatchCommand(commData []string, m *discordgo.MessageCreate) bool {
 
 // Prepares the play command when a song is manually entered
 func prepFirstSongEntered(m *discordgo.MessageCreate, isManual bool) {
+	// **CRITICAL PLAYBACK PROTECTION** - Prevent multiple simultaneous playback
+	if getPlaybackState() {
+		log.Printf("WARN: Playback already in progress, rejecting new playback request")
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** 🚫 Playback is already in progress. Use `skip` or `stop` to control current playback.")
+		return
+	}
+
+	// Atomically set playback state
+	setPlaybackState(true)
+	defer setPlaybackState(false)
+
 	if len(queue) > 0 {
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Playing ["+queue[0].Title+"] :notes:")
 	}
