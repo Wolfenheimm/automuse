@@ -359,6 +359,7 @@ func displayQueue(m *discordgo.MessageCreate) {
 		log.Printf("Queue display: Starting with %d songs, header length: %d chars", len(queueCopy), len(queueList))
 
 		// Process queue with very aggressive pagination to prevent ANY truncation
+		// TODO: consts should be in a config file
 		const maxMessageLength = 1000 // Very conservative limit to prevent Discord truncation
 		const maxSongsPerMessage = 10 // Force pagination every 10 songs regardless of length
 		currentMessage := queueList
