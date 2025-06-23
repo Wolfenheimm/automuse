@@ -390,6 +390,32 @@ func (er *EmergencyResetCommand) Handle(s *discordgo.Session, m *discordgo.Messa
 	return nil
 }
 
+type PauseCommand struct{}
+
+func (p *PauseCommand) CanHandle(content string) bool {
+	return content == "pause"
+}
+func (p *PauseCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		pauseCommand(s, m)
+	}()
+	return nil
+}
+
+type ResumeCommand struct{}
+
+func (r *ResumeCommand) CanHandle(content string) bool {
+	return content == "resume"
+}
+func (r *ResumeCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		resumeCommand(s, m)
+	}()
+	return nil
+}
+
 var commandHandlers = []CommandHandler{
 	&PlayHelpCommand{}, // Check specific play commands first
 	&PlayStuffCommand{},
@@ -397,6 +423,8 @@ var commandHandlers = []CommandHandler{
 	&PlayCommand{}, // General play command last
 	&StopCommand{},
 	&SkipCommand{},
+	&PauseCommand{},  // Add pause command
+	&ResumeCommand{}, // Add resume command
 	&QueueCommand{},
 	&RemoveCommand{},
 	&CacheCommand{},

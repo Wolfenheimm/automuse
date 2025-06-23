@@ -151,6 +151,7 @@ func stop(m *discordgo.MessageCreate) {
 
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Stopping ["+v.nowPlaying.Title+"] & Clearing Queue :octagonal_sign:")
 	v.stop = true
+	v.paused = false // Reset pause state when stopping
 
 	// Clear queue and reset all processing flags
 	queueMutex.Lock()
@@ -191,6 +192,7 @@ func emergencyCleanup() {
 	setStopRequested(false)
 	setPlaybackEnding(false)
 	setPlaybackState(false) // Reset playback state
+	v.paused = false        // Reset pause state
 
 	// Clear any rate limiting
 	userRateMutex.Lock()
@@ -469,6 +471,8 @@ func showHelp(m *discordgo.MessageCreate) {
 	helpMessage += "`skip` - Skip the current song\n"
 	helpMessage += "`skip [number]` - Skip to a specific position in queue\n"
 	helpMessage += "`skip to [number]` - Skip to a specific position in queue\n"
+	helpMessage += "`pause` - Pause the currently playing song\n"
+	helpMessage += "`resume` - Resume the paused song\n"
 	helpMessage += "`queue` - Display the current queue\n"
 	helpMessage += "`remove [number]` - Remove a song from the queue at position\n"
 	helpMessage += "`move [from] [to]` - Move a song from one position to another\n"
@@ -492,7 +496,9 @@ func showHelp(m *discordgo.MessageCreate) {
 	helpMessage += "`play https://www.youtube.com/watch?v=dQw4w9WgXcQ`\n"
 	helpMessage += "`play never gonna give you up`\n"
 	helpMessage += "`skip 3` - Skip to song #3 in queue\n"
-	helpMessage += "`remove 2` - Remove song #2 from queue\n\n"
+	helpMessage += "`remove 2` - Remove song #2 from queue\n"
+	helpMessage += "`pause` - Pause current song\n"
+	helpMessage += "`resume` - Resume paused song\n\n"
 
 	s.ChannelMessageSend(m.ChannelID, helpMessage)
 }
@@ -710,4 +716,56 @@ func emergencyResetCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** ✅ Emergency reset completed. Bot should be responsive now.")
 	log.Printf("INFO: Emergency reset performed by user %s", m.Author.ID)
+}
+
+// pauseCommand pauses the currently playing song
+func pauseCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
+	// Check if anything is currently playing
+	if v.nowPlaying == (Song{}) {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** ❌ No song is currently playing to pause.")
+		return
+	}
+
+	// Check if already paused
+	if v.paused {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** ⏸️ Song is already paused. Use `resume` to continue playback.")
+		return
+	}
+
+	// Set pause state
+	v.paused = true
+
+	// Set speaking to false to indicate pause
+	if v.voice != nil && v.voice.Ready {
+		v.voice.Speaking(false)
+	}
+
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** ⏸️ Paused ["+v.nowPlaying.Title+"]")
+	log.Printf("INFO: Paused song: %s", v.nowPlaying.Title)
+}
+
+// resumeCommand resumes the currently paused song
+func resumeCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
+	// Check if anything is currently playing
+	if v.nowPlaying == (Song{}) {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** ❌ No song is currently playing to resume.")
+		return
+	}
+
+	// Check if not paused
+	if !v.paused {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** ▶️ Song is not paused. Use `pause` to pause playback first.")
+		return
+	}
+
+	// Set resume state
+	v.paused = false
+
+	// Set speaking to true to indicate resume
+	if v.voice != nil && v.voice.Ready {
+		v.voice.Speaking(true)
+	}
+
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** ▶️ Resumed ["+v.nowPlaying.Title+"]")
+	log.Printf("INFO: Resumed song: %s", v.nowPlaying.Title)
 }

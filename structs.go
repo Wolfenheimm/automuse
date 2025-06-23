@@ -46,6 +46,7 @@ type VoiceInstance struct {
 	nowPlaying Song
 	stop       bool
 	speaking   bool
+	paused     bool
 }
 
 type BadQualitySongNodes struct {

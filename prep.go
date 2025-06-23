@@ -222,6 +222,7 @@ func prepSkip() {
 	log.Printf("INFO: Skip command initiated")
 	v.stop = true
 	v.speaking = false
+	v.paused = false // Reset pause state when skipping
 
 	// Force stop the current audio stream
 	if v.voice != nil {

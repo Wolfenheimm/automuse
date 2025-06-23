@@ -252,10 +252,14 @@ func queueSingleSong(m *discordgo.MessageCreate, link string) {
 	if err != nil {
 		log.Printf("[ERROR] Failed to get video with YouTube client: %v", err)
 
-		// Check if it's an age restriction or embedding disabled error
-		if strings.Contains(err.Error(), "age restriction") || strings.Contains(err.Error(), "embedding") || strings.Contains(err.Error(), "disabled") {
-			log.Printf("[INFO] Attempting fallback with yt-dlp for restricted video")
-			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Video has restrictions, trying alternative method...")
+		// Check if it's an age restriction, embedding disabled error, or cipher issue
+		if strings.Contains(err.Error(), "age restriction") ||
+			strings.Contains(err.Error(), "embedding") ||
+			strings.Contains(err.Error(), "disabled") ||
+			strings.Contains(err.Error(), "cipher") ||
+			strings.Contains(err.Error(), "signature") {
+			log.Printf("[INFO] Attempting fallback with yt-dlp for restricted/problematic video")
+			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Video has restrictions or compatibility issues, using enhanced method...")
 
 			// Try using yt-dlp as fallback for restricted videos
 			if queueWithYtDlp(m, link) {
@@ -576,34 +580,60 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 
 	log.Printf("INFO: Starting threaded playlist processing for: %s", playlistID)
 
-	var allVideoIds []string
-	nextPageToken := ""
+	// Use yt-dlp as primary method for playlist processing due to YouTube client issues
+	playlistURL := "https://www.youtube.com/playlist?list=" + playlistID
+	log.Printf("INFO: Using yt-dlp for playlist processing: %s", playlistURL)
 
-	// First pass: collect all video IDs from the playlist
-	for {
-		var snippet = []string{"snippet"}
-		playlistResponse := playlistItemsList(service, snippet, playlistID, nextPageToken)
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** 🔍 Scanning playlist with enhanced method (this may take a moment)...")
 
-		for _, playlistItem := range playlistResponse.Items {
-			videoId := playlistItem.Snippet.ResourceId.VideoId
-			allVideoIds = append(allVideoIds, videoId)
-		}
+	// Get playlist info using yt-dlp
+	cmd := exec.Command("yt-dlp",
+		"--flat-playlist",
+		"--print", "id",
+		"--print", "title",
+		"--no-warnings",
+		playlistURL)
 
-		nextPageToken = playlistResponse.NextPageToken
-		if nextPageToken == "" {
-			break
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("ERROR: yt-dlp failed to get playlist info: %v", err)
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** ❌ Failed to access playlist. It may be private, deleted, or region-restricted.")
+		return
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) < 2 {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** ❌ Playlist appears to be empty or inaccessible.")
+		return
+	}
+
+	// Parse yt-dlp output (alternating lines: id, title, id, title, ...)
+	var videoData []struct {
+		ID    string
+		Title string
+	}
+
+	for i := 0; i < len(lines); i += 2 {
+		if i+1 < len(lines) {
+			videoData = append(videoData, struct {
+				ID    string
+				Title string
+			}{
+				ID:    strings.TrimSpace(lines[i]),
+				Title: strings.TrimSpace(lines[i+1]),
+			})
 		}
 	}
 
-	if len(allVideoIds) == 0 {
+	if len(videoData) == 0 {
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** No videos found in playlist or playlist is private.")
 		return
 	}
 
 	// Check if playlist is too large
-	if len(allVideoIds) > 100 {
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** 🚫 Playlist too large! (%d songs). Maximum allowed is 100 songs to prevent system overload.", len(allVideoIds)))
-		log.Printf("WARN: Playlist rejected - too large (%d songs)", len(allVideoIds))
+	if len(videoData) > 100 {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** 🚫 Playlist too large! (%d songs). Maximum allowed is 100 songs to prevent system overload.", len(videoData)))
+		log.Printf("WARN: Playlist rejected - too large (%d songs)", len(videoData))
 		return
 	}
 
@@ -612,21 +642,21 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 	currentQueueSize := len(queue)
 	queueMutex.Unlock()
 
-	if currentQueueSize+len(allVideoIds) > maxQueueSize {
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** 🚫 Adding this playlist (%d songs) would exceed the maximum queue size (%d). Current queue: %d songs.", len(allVideoIds), maxQueueSize, currentQueueSize))
+	if currentQueueSize+len(videoData) > maxQueueSize {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** 🚫 Adding this playlist (%d songs) would exceed the maximum queue size (%d). Current queue: %d songs.", len(videoData), maxQueueSize, currentQueueSize))
 		log.Printf("WARN: Playlist rejected - would exceed queue limit")
 		return
 	}
 
-	log.Printf("INFO: Found %d videos in playlist", len(allVideoIds))
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Found %d videos! Processing playlist (this may take a moment)... ⏳", len(allVideoIds)))
+	log.Printf("INFO: Found %d videos in playlist using yt-dlp", len(videoData))
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Found %d videos! Processing playlist... ⏳", len(videoData)))
 
 	// Process all videos and queue them before starting playback
 	songsProcessed := 0
 	successfullyQueued := 0
 
 	// Reduced concurrent processing to prevent overwhelming
-	maxConcurrent := 2 // Reduced from 3 to 2 for better stability
+	maxConcurrent := 2
 	semaphore := make(chan struct{}, maxConcurrent)
 
 	// Structure to hold results with their original index
@@ -637,10 +667,10 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 	}
 
 	// Channel to collect results from goroutines
-	resultChan := make(chan processResult, len(allVideoIds))
+	resultChan := make(chan processResult, len(videoData))
 
 	// Process all videos in parallel
-	for i, videoId := range allVideoIds {
+	for i, video := range videoData {
 		// Check if we should stop processing (user might have stopped)
 		if isStopRequested() || isPlaybackEnding() {
 			log.Printf("INFO: Stopping playlist processing due to stop request")
@@ -650,45 +680,41 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 
 		semaphore <- struct{}{} // Acquire semaphore
 
-		go func(videoId string, index int) {
+		go func(videoID, title string, index int) {
 			defer func() { <-semaphore }() // Release semaphore
 
-			videoURL := "https://www.youtube.com/watch?v=" + videoId
-			log.Printf("INFO: Processing video %d/%d: %s", index+1, len(allVideoIds), videoId)
+			videoURL := "https://www.youtube.com/watch?v=" + videoID
+			log.Printf("INFO: Processing video %d/%d: %s - %s", index+1, len(videoData), title, videoID)
 
-			// Get video metadata first (always, even if we have cached files)
-			title, videoID, duration, err := getVideoMetadata(videoId)
-			if err != nil {
-				log.Printf("[ERROR] Failed to get video metadata for %s: %v", videoId, err)
-				resultChan <- processResult{index: index, success: false}
-				return
+			// Get duration using yt-dlp (more reliable than YouTube client)
+			durationCmd := exec.Command("yt-dlp",
+				"--no-download",
+				"--print", "duration_string",
+				"--no-warnings",
+				videoURL)
+
+			durationOutput, err := durationCmd.Output()
+			duration := "Unknown"
+			if err == nil {
+				duration = strings.TrimSpace(string(durationOutput))
 			}
 
-			// Create song with proper metadata
+			// Create song with yt-dlp metadata
 			song := fillSongInfo(m.ChannelID, m.Author.ID, m.ID, title, videoID, duration)
+			song.VideoURL = videoURL // Store original URL for yt-dlp processing
 
-			// Try to get stream URL
-			url, err := getStreamURL(videoID)
-			if err != nil {
-				log.Printf("[ERROR] Failed to get stream URL for %s: %v", title, err)
-				// Store original URL for yt-dlp processing as fallback
-				song.VideoURL = videoURL
-			} else {
-				song.VideoURL = url
-			}
-
-			log.Printf("[INFO] Successfully processed (%d/%d): %s", index+1, len(allVideoIds), title)
+			log.Printf("[INFO] Successfully processed (%d/%d): %s", index+1, len(videoData), title)
 			resultChan <- processResult{index: index, song: song, success: true}
 
-		}(videoId, i)
+		}(video.ID, video.Title, i)
 	}
 
 	// Collect all results with timeout protection
-	results := make([]processResult, len(allVideoIds))
+	results := make([]processResult, len(videoData))
 	timeout := time.NewTimer(5 * time.Minute) // 5 minute timeout for playlist processing
 	defer timeout.Stop()
 
-	for i := 0; i < len(allVideoIds); i++ {
+	for i := 0; i < len(videoData); i++ {
 		select {
 		case result := <-resultChan:
 			results[result.index] = result
@@ -699,8 +725,8 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 			}
 
 			// Send progress updates less frequently to avoid spam
-			if songsProcessed%10 == 0 || songsProcessed == len(allVideoIds) {
-				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Processed %d/%d songs from playlist... 🎵", songsProcessed, len(allVideoIds)))
+			if songsProcessed%10 == 0 || songsProcessed == len(videoData) {
+				s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**[Muse]** Processed %d/%d songs from playlist... 🎵", songsProcessed, len(videoData)))
 			}
 
 		case <-timeout.C:
@@ -711,7 +737,7 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 	}
 
 processResults:
-	log.Printf("INFO: Playlist processing complete. Successfully queued %d/%d songs", successfullyQueued, len(allVideoIds))
+	log.Printf("INFO: Playlist processing complete. Successfully queued %d/%d songs", successfullyQueued, len(videoData))
 
 	if successfullyQueued == 0 {
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** No songs could be processed from the playlist. All videos may be unavailable or restricted.")
@@ -750,7 +776,7 @@ processResults:
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** ✅ Playlist added to queue! Songs will play after current music. 🎵")
 	}
 
-	log.Printf("INFO: Threaded playlist processing completed for %d videos", len(allVideoIds))
+	log.Printf("INFO: Threaded playlist processing completed for %d videos", len(videoData))
 }
 
 // getVideoMetadata fetches video metadata (title, duration) for a given video ID or URL

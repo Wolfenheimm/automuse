@@ -330,13 +330,49 @@ func (v *VoiceInstance) DirectDCA(filePath string) {
 	// Create a stream
 	log.Printf("INFO: Creating audio stream")
 	done := make(chan error)
-	stream := dca.NewStream(encodingSession, v.voice, done)
-	if stream == nil {
-		log.Printf("ERROR: Failed to create stream")
-		v.voice.Speaking(false)
-		return
-	}
-	v.stream = stream
+
+	// Instead of using dca.NewStream, we'll manually handle frame sending to enable pause/resume
+	go func() {
+		defer func() { done <- nil }()
+
+		for {
+			// Check for stop condition
+			if v.stop {
+				log.Printf("INFO: Stop detected in DCA stream loop")
+				return
+			}
+
+			// Read frame from encoder
+			frame, err := encodingSession.OpusFrame()
+			if err != nil {
+				if err != io.EOF {
+					log.Printf("ERROR: Error reading opus frame: %v", err)
+				}
+				return
+			}
+
+			// Handle pause - don't send frames to Discord
+			if v.paused {
+				// Sleep to maintain timing even when paused
+				time.Sleep(20 * time.Millisecond)
+				continue
+			}
+
+			// Normal operation - send frame to Discord
+			select {
+			case v.voice.OpusSend <- frame:
+				// Frame sent successfully
+			case <-time.After(1 * time.Second):
+				log.Printf("ERROR: Timeout sending opus frame to Discord")
+				return
+			}
+
+			// Maintain 20ms timing
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
+
+	v.stream = nil // We're not using dca.Stream anymore
 
 	// Playback duration estimation based on file size and bitrate
 	estimatedDuration := float64(fileInfo.Size()) / (float64(options.Bitrate) * 1000 / 8)
@@ -359,9 +395,11 @@ func (v *VoiceInstance) DirectDCA(filePath string) {
 		for keepAlive {
 			<-ticker.C
 			if v.voice != nil && v.voice.Ready {
-				// Refresh speaking state to keep connection alive
-				v.voice.Speaking(true)
-				log.Printf("DEBUG: Refreshed speaking state at %.2f seconds", time.Since(streamStartTime).Seconds())
+				// Only refresh speaking state if not paused
+				if !v.paused {
+					v.voice.Speaking(true)
+					log.Printf("DEBUG: Refreshed speaking state at %.2f seconds", time.Since(streamStartTime).Seconds())
+				}
 			} else {
 				return
 			}
@@ -375,11 +413,11 @@ func (v *VoiceInstance) DirectDCA(filePath string) {
 		// which is a good sign, so continue waiting for the full stream
 		log.Printf("DEBUG: Stream running for 2+ seconds, continuing to monitor")
 
-		// Create a ticker to check for skip during playback
+		// Create a ticker to check for skip/pause during playback
 		skipCheckTicker := time.NewTicker(SkipCheckInterval)
 		defer skipCheckTicker.Stop()
 
-		// Wait for either stream completion or skip command
+		// Wait for either stream completion, skip command, or pause/resume
 		for {
 			select {
 			case streamErr := <-done:
@@ -409,6 +447,28 @@ func (v *VoiceInstance) DirectDCA(filePath string) {
 						}
 					}
 					goto cleanup
+				}
+
+				// Handle pause/resume logic
+				if v.paused {
+					// Song is paused, set speaking to false and stop sending audio
+					if v.voice != nil && v.voice.Ready {
+						v.voice.Speaking(false)
+					}
+					log.Printf("DEBUG: Song paused during playback - audio transmission will be handled in stream loop")
+
+					// Wait for resume or skip
+					for v.paused && !v.stop {
+						time.Sleep(100 * time.Millisecond)
+					}
+
+					// If not stopped, resume
+					if !v.stop && !v.paused {
+						if v.voice != nil && v.voice.Ready {
+							v.voice.Speaking(true)
+						}
+						log.Printf("DEBUG: Song resumed during playback - audio transmission will resume")
+					}
 				}
 			}
 		}
@@ -657,6 +717,24 @@ func playMP3WithExistingConnection(vc *discordgo.VoiceConnection, filePath strin
 				break
 			}
 
+			// Handle pause - stop sending frames but keep reading from ffmpeg
+			if v.paused {
+				log.Printf("DEBUG: Audio paused - not sending frames to Discord")
+				// Still read from ffmpeg to prevent buffer issues, but don't send to Discord
+				err = binary.Read(ffmpegbuf, binary.LittleEndian, &audiobuf)
+				if err == io.EOF || err == io.ErrUnexpectedEOF {
+					log.Printf("INFO: End of audio file reached while paused")
+					break
+				}
+				if err != nil {
+					log.Printf("ERROR: Error reading from ffmpeg while paused: %v", err)
+					break
+				}
+				// Sleep a bit to prevent busy waiting
+				time.Sleep(20 * time.Millisecond)
+				continue // Skip sending to Discord
+			}
+
 			// Read audio data
 			err = binary.Read(ffmpegbuf, binary.LittleEndian, &audiobuf)
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -705,9 +783,31 @@ func playMP3WithExistingConnection(vc *discordgo.VoiceConnection, filePath strin
 				return
 			}
 
-			// Keep the speaking state alive
-			if vc != nil && vc.Ready {
-				vc.Speaking(true)
+			// Handle pause/resume logic
+			if v.paused {
+				// Song is paused, set speaking to false and stop sending audio
+				if v.voice != nil && v.voice.Ready {
+					v.voice.Speaking(false)
+				}
+				log.Printf("DEBUG: MP3 playback paused - audio transmission will be handled in stream loop")
+
+				// Wait for resume or skip
+				for v.paused && !v.stop {
+					time.Sleep(100 * time.Millisecond)
+				}
+
+				// If not stopped, resume
+				if !v.stop && !v.paused {
+					if v.voice != nil && v.voice.Ready {
+						v.voice.Speaking(true)
+					}
+					log.Printf("DEBUG: MP3 playback resumed - audio transmission will resume")
+				}
+			} else {
+				// Keep the speaking state alive if not paused
+				if vc != nil && vc.Ready {
+					vc.Speaking(true)
+				}
 			}
 		case <-done:
 			// Audio playback is complete, clean up
