@@ -13,12 +13,10 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
-// Configuration struct for better management
+// Configuration struct for server-agnostic operation
 type Config struct {
 	BotToken     string
 	YoutubeToken string
-	GuildID      string
-	ChannelID    string
 	Debug        bool
 }
 
@@ -26,16 +24,15 @@ type Config struct {
 var errorHandler *ErrorHandler
 
 // LoadConfig loads configuration from environment variables with validation
+// Now only requires BOT_TOKEN and YT_TOKEN - server agnostic!
 func LoadConfig() (*Config, error) {
 	config := &Config{
 		BotToken:     os.Getenv("BOT_TOKEN"),
 		YoutubeToken: os.Getenv("YT_TOKEN"),
-		GuildID:      os.Getenv("GUILD_ID"),
-		ChannelID:    os.Getenv("GENERAL_CHAT_ID"),
 		Debug:        os.Getenv("DEBUG") == "true",
 	}
 
-	// Validate required configuration
+	// Validate required configuration (only tokens needed now)
 	var missing []string
 	if config.BotToken == "" {
 		missing = append(missing, "BOT_TOKEN")
@@ -52,9 +49,8 @@ func LoadConfig() (*Config, error) {
 	log.Printf("Configuration loaded:")
 	log.Printf("- Bot Token: %s***", config.BotToken[:8])
 	log.Printf("- YouTube Token: %s***", config.YoutubeToken[:8])
-	log.Printf("- Guild ID: %s", config.GuildID)
-	log.Printf("- Channel ID: %s", config.ChannelID)
 	log.Printf("- Debug Mode: %t", config.Debug)
+	log.Printf("- Server Agnostic: ✅ (will work in any server)")
 
 	return config, nil
 }
@@ -441,12 +437,21 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	// Setup Channel Information
-	guildID := SearchGuild(m.ChannelID)
+	// Server-agnostic setup - dynamically get guild info from the message
+	guildID := m.GuildID // Use the guild where the message was sent
+	if guildID == "" {
+		// Handle DMs gracefully
+		log.Printf("Command received in DM from %s: %s", m.Author.Username, m.Content)
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** I only work in Discord servers, not DMs!")
+		return
+	}
+
+	// Dynamic voice instance setup per guild/session
 	v.guildID = guildID
 	v.session = s
-	log.Printf("Processing command from Guild: %s, Channel: %s, Message: %s",
-		guildID, m.ChannelID, m.Content)
+
+	log.Printf("Processing command from Guild: %s, Channel: %s, User: %s, Message: %s",
+		guildID, m.ChannelID, m.Author.Username, m.Content)
 
 	// Handle commands using the new pattern
 	for _, handler := range commandHandlers {
@@ -459,8 +464,9 @@ func executionHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 
-	// If no command was recognized and message is not empty, log it
-	if m.Content != "" {
-		log.Printf("Unrecognized command: %s", m.Content)
+	// If no command was recognized and message is not empty, log it (optional)
+	if m.Content != "" && strings.HasPrefix(m.Content, "play") {
+		log.Printf("Unrecognized play command variant: %s", m.Content)
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** Command not recognized. Try `play help` for available commands.")
 	}
 }

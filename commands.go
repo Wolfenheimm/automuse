@@ -77,6 +77,9 @@ func queueSong(m *discordgo.MessageCreate) {
 
 	// If there's nothing playing and the queue grew AND playback wasn't already started
 	if !playbackAlreadyStarted && v.nowPlaying == (Song{}) && len(queue) >= 1 {
+		// Set current user for voice operations (server-agnostic)
+		v.currentUserID = m.Author.ID
+
 		if err := joinVoiceChannelWithError(); err != nil {
 			voiceErr := NewVoiceError("Failed to join voice channel",
 				"Could not join voice channel. Please check permissions.", err).
@@ -482,12 +485,15 @@ func showHelp(m *discordgo.MessageCreate) {
 	helpMessage += "`buffer-status` - Show buffer manager status and download queue\n\n"
 	helpMessage += ":gear: **SYSTEM COMMANDS** :gear:\n"
 	helpMessage += "`emergency-reset` or `reset` - Emergency reset if bot gets stuck\n\n"
+	helpMessage += ":gear: **SETUP REQUIREMENTS** :gear:\n"
+	helpMessage += "• **BOT_TOKEN** - Your Discord bot token\n"
+	helpMessage += "• **YT_TOKEN** - Your YouTube Data API key\n"
+	helpMessage += "• **Join a voice channel** - Bot will auto-join your channel\n\n"
 	helpMessage += ":shield: **RATE LIMITING & PROTECTION** :shield:\n"
 	helpMessage += "• **Playlist Cooldown**: 5 seconds between playlists\n"
 	helpMessage += "• **User Rate Limiting**: 3 seconds between commands per user\n"
 	helpMessage += "• **Max Queue Size**: 500 songs total\n"
-	helpMessage += "• **Max Playlist Size**: 100 songs per playlist\n"
-	helpMessage += "• **Concurrent Playlists**: Only 1 playlist can be processed at a time\n\n"
+	helpMessage += "• **Max Playlist Size**: 100 songs per playlist\n\n"
 	helpMessage += ":gear: **SUPPORTED FORMATS** :gear:\n"
 	helpMessage += "• YouTube videos: `https://www.youtube.com/watch?v=...`\n"
 	helpMessage += "• YouTube playlists: `https://www.youtube.com/playlist?list=...`\n"

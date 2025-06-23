@@ -38,15 +38,16 @@ type Command struct {
 
 // VoiceInstance struct for voice connection
 type VoiceInstance struct {
-	session    *discordgo.Session
-	guildID    string
-	voice      *discordgo.VoiceConnection
-	encoder    *dca.EncodeSession
-	stream     *dca.StreamingSession
-	nowPlaying Song
-	stop       bool
-	speaking   bool
-	paused     bool
+	session       *discordgo.Session
+	guildID       string
+	voice         *discordgo.VoiceConnection
+	encoder       *dca.EncodeSession
+	stream        *dca.StreamingSession
+	nowPlaying    Song
+	stop          bool
+	speaking      bool
+	paused        bool
+	currentUserID string // Track the user who initiated the current session
 }
 
 type BadQualitySongNodes struct {

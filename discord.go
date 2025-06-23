@@ -1,47 +1,73 @@
 package main
 
 import (
+	"fmt"
 	"log"
-	"os"
 )
 
-// Joins the voice channel designated by the environment variables
+// Server-agnostic voice channel joining - finds user's current voice channel
 func joinVoiceChannel() {
-	// It was a chosen decision to have hard-coded guild and channel IDs
-	// - This is because the bot is only used in one server, and the voice channel is always the same
-	// - If you want to use this bot in different channels, there is definitely a dynamic way to do this
-	// Note: It might not be possible for the bot to join multiple channels at once, this hasn't been tested
-	generalChan := os.Getenv("GENERAL_CHAT_ID") // original value for guild id = v.guildID
-	guildID := os.Getenv("GUILD_ID")
+	if v.currentUserID == "" {
+		log.Printf("ERROR: No current user ID set for voice operations")
+		return
+	}
 
-	// Validate required environment variables
-	if guildID == "" {
-		log.Printf("ERROR: GUILD_ID environment variable is not set")
+	// Find the user's current voice channel dynamically
+	userVoiceChannelID := SearchVoiceChannel(v.currentUserID)
+	if userVoiceChannelID == "" {
+		log.Printf("ERROR: User %s is not in any voice channel in guild %s", v.currentUserID, v.guildID)
 		return
 	}
-	if generalChan == "" {
-		log.Printf("ERROR: GENERAL_CHAT_ID environment variable is not set")
-		return
-	}
+
+	log.Printf("INFO: Found user %s in voice channel %s, attempting to join...", v.currentUserID, userVoiceChannelID)
 
 	var err error
-	v.voice, err = s.ChannelVoiceJoin(guildID, generalChan, false, true) // Changed first param to false (mute=false)
+	v.voice, err = s.ChannelVoiceJoin(v.guildID, userVoiceChannelID, false, true)
 
 	if err != nil {
 		// Check if there's an existing connection we can reuse
-		if existingConn, ok := s.VoiceConnections[guildID]; ok {
+		if existingConn, ok := s.VoiceConnections[v.guildID]; ok {
 			v.voice = existingConn
-			log.Printf("WARN: Reusing existing voice connection for guild %s", guildID)
+			log.Printf("WARN: Reusing existing voice connection for guild %s", v.guildID)
 		} else {
 			log.Printf("ERROR: Failed to join voice channel - Guild ID: %s, Channel: %s, Error: %v",
-				guildID, generalChan, err)
+				v.guildID, userVoiceChannelID, err)
 			return
 		}
 	} else {
-		log.Printf("INFO: Successfully joined voice channel %s in guild %s", generalChan, guildID)
+		log.Printf("INFO: Successfully joined voice channel %s in guild %s", userVoiceChannelID, v.guildID)
 	}
 
 	v.voice.Speaking(false)
+}
+
+// Enhanced version that accepts a specific user ID
+func joinUserVoiceChannel(userID string) error {
+	// Find the specific user's voice channel
+	userVoiceChannelID := SearchVoiceChannel(userID)
+	if userVoiceChannelID == "" {
+		return fmt.Errorf("user %s is not in any voice channel in guild %s", userID, v.guildID)
+	}
+
+	log.Printf("INFO: Joining user %s's voice channel %s", userID, userVoiceChannelID)
+
+	var err error
+	v.voice, err = s.ChannelVoiceJoin(v.guildID, userVoiceChannelID, false, true)
+
+	if err != nil {
+		// Check if there's an existing connection we can reuse
+		if existingConn, ok := s.VoiceConnections[v.guildID]; ok {
+			v.voice = existingConn
+			log.Printf("WARN: Reusing existing voice connection for guild %s", v.guildID)
+			return nil
+		} else {
+			return fmt.Errorf("failed to join voice channel %s in guild %s: %v", userVoiceChannelID, v.guildID, err)
+		}
+	}
+
+	v.voice.Speaking(false)
+	log.Printf("INFO: Successfully joined voice channel %s in guild %s", userVoiceChannelID, v.guildID)
+	return nil
 }
 
 // Gets guild information with proper error handling
