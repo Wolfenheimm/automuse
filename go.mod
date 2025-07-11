@@ -6,7 +6,9 @@ require (
 	github.com/bwmarrin/discordgo v0.28.1
 	github.com/jonas747/dca v0.0.0-20210930103944-155f5e5f0cc7
 	github.com/kkdai/youtube/v2 v2.10.2
+	github.com/rs/zerolog v1.32.0
 	google.golang.org/api v0.214.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32
 )
 
@@ -28,6 +30,9 @@ require (
 	github.com/googleapis/gax-go/v2 v2.14.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jonas747/ogg v0.0.0-20161220051205-b4f6f4cf3757 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.19 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.54.0 // indirect
 	go.opentelemetry.io/otel v1.29.0 // indirect
 	go.opentelemetry.io/otel/metric v1.29.0 // indirect
