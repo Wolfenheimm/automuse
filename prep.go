@@ -111,17 +111,28 @@ func prepPlaylistCommand(commData []string, m *discordgo.MessageCreate) {
 
 // Checks if the user is queuing a song or playlist
 func prepWatchCommand(commData []string, m *discordgo.MessageCreate) bool {
-	// Check if this is a playlist URL (contains list=PL)
-	if strings.Contains(commData[1], "list=PL") {
+	// Check if this is a playlist URL (contains list= or /playlist?)
+	if strings.Contains(commData[1], "list=") || strings.Contains(commData[1], "/playlist?") {
 		log.Printf("INFO: Detected playlist URL: %s", commData[1])
 
-		// Extract the playlist ID
-		parts := strings.SplitN(commData[1], "list=", 2)
-		if len(parts) > 1 {
-			playlistPart := parts[1]
-			// Remove any additional parameters after the playlist ID
-			playlistID := strings.Split(playlistPart, "&")[0]
+		var playlistID string
+		
+		// Extract playlist ID from different URL formats
+		if strings.Contains(commData[1], "/playlist?list=") {
+			// Format: https://www.youtube.com/playlist?list=PL...
+			parts := strings.SplitN(commData[1], "list=", 2)
+			if len(parts) > 1 {
+				playlistID = strings.Split(parts[1], "&")[0]
+			}
+		} else if strings.Contains(commData[1], "list=") {
+			// Format: https://www.youtube.com/watch?v=...&list=PL...
+			parts := strings.SplitN(commData[1], "list=", 2)
+			if len(parts) > 1 {
+				playlistID = strings.Split(parts[1], "&")[0]
+			}
+		}
 
+		if playlistID != "" {
 			log.Printf("INFO: Extracted playlist ID: %s", playlistID)
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Detected playlist! Starting first song and queuing rest in background... :infinity:")
 
@@ -131,11 +142,8 @@ func prepWatchCommand(commData []string, m *discordgo.MessageCreate) bool {
 		} else {
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Could not extract playlist ID from URL")
 		}
-	} else if strings.Contains(commData[1], "list=") {
-		// Extract just the video part (before list=) for regular lists (not playlists)
-		queueSingleSong(m, strings.SplitN(commData[1], "list=", 2)[0])
-	} else if strings.Contains(commData[1], "watch?") && !strings.Contains(commData[1], "list=") {
-		// Regular single video
+	} else if strings.Contains(commData[1], "watch?") {
+		// Regular single video (without playlist)
 		queueSingleSong(m, commData[1])
 	} else {
 		s.ChannelMessageSend(m.ChannelID, "**[Muse]** The url must be the second or third parameter")

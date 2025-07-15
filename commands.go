@@ -63,9 +63,11 @@ func queueSong(m *discordgo.MessageCreate) {
 	// Check if a youtube link is present
 	if strings.Contains(m.Content, "https://www.youtube") {
 		// Check if the link is a playlist or a simple video
-		if strings.Contains(m.Content, "list") && strings.Contains(m.Content, "-pl") || strings.Contains(m.Content, "/playlist?") {
-			prepPlaylistCommand(commData, m)
-			playbackAlreadyStarted = true // Playlist processing handles its own queue display
+		// Route ALL playlist URLs to the enhanced yt-dlp-based processor
+		if (strings.Contains(m.Content, "list") && strings.Contains(m.Content, "-pl")) || 
+		   strings.Contains(m.Content, "/playlist?") || 
+		   strings.Contains(m.Content, "list=PL") {
+			playbackAlreadyStarted = prepWatchCommand(commData, m)
 		} else if strings.Contains(m.Content, "watch") && !strings.Contains(m.Content, "-pl") {
 			playbackAlreadyStarted = prepWatchCommand(commData, m)
 		}
