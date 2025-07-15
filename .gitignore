@@ -1,39 +1,255 @@
-# IDE
-.vscode
-.idea
+# AutoMuse Discord Music Bot - Git Ignore File
 
-# Audio files
-*.mp3
-*.wav
-*.webm
-*.dca
+# =============================================================================
+# SECURITY - NEVER COMMIT THESE
+# =============================================================================
 
-# Binaries and executables
-automuse
+# Environment variables and secrets
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+*.env
+
+# Token files and API keys
+*token*
+*secret*
+*key*
+config.json
+secrets.json
+
+# =============================================================================
+# GO LANGUAGE
+# =============================================================================
+
+# Binaries for programs and plugins
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+automuse
+automuse.exe
+automuse_improved
+automuse_improved.exe
 
-# Backup files
-*.bak
-*~
-
-# Test binary, built with 'go test -c'
+# Test binary, built with `go test -c`
 *.test
 
 # Output of the go coverage tool
 *.out
+coverage.html
 
-# Dependency directories (remove these if you want to check in your vendor folder)
+# Dependency directories
 vendor/
 
 # Go workspace file
 go.work
+go.work.sum
 
-# Storage
-.DS_Store
+# =============================================================================
+# AUDIO & MEDIA FILES
+# =============================================================================
 
-# Downloads directory
+# Downloaded audio files
 downloads/
+*.mp3
+*.m4a
+*.webm
+*.ogg
+*.wav
+*.flac
+*.dca
+
+# Metadata and cache files
+downloads/metadata.json
+cache/
+temp/
+tmp/
+
+# FFmpeg temporary files
+*.tmp
+*.temp
+
+# =============================================================================
+# LOGS & MONITORING
+# =============================================================================
+
+# Log files
+logs/
+*.log
+*.log.*
+*.log.gz
+*.log.bz2
+
+# Specific log files
+automuse.log
+discord.log
+youtube.log
+error.log
+debug.log
+
+# Monitoring and metrics
+metrics/
+monitoring/
+
+# =============================================================================
+# DEVELOPMENT & EDITOR FILES
+# =============================================================================
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# GoLand/IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# =============================================================================
+# OPERATING SYSTEM FILES
+# =============================================================================
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Icon?
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# =============================================================================
+# BACKUP & TEMPORARY FILES
+# =============================================================================
+
+# Backup files
+*.backup
+*.bak
+*.old
+*.orig
+main_legacy.go.backup
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# =============================================================================
+# DOCKER & CONTAINERS
+# =============================================================================
+
+# Docker files (if you add Docker later)
+.dockerignore
+docker-compose.override.yml
+
+# =============================================================================
+# TESTING & CI/CD
+# =============================================================================
+
+# Test results
+test-results/
+coverage/
+*.cover
+*.coverprofile
+
+# Benchmark results
+*.bench
+
+# =============================================================================
+# THIRD-PARTY TOOLS
+# =============================================================================
+
+# yt-dlp/youtube-dl cache
+.cache/
+.youtube-dl-cache/
+.yt-dlp-cache/
+
+# FFmpeg temporary files
+ffmpeg*.log
+
+# =============================================================================
+# PROJECT SPECIFIC
+# =============================================================================
+
+# Development builds
+build/
+dist/
+release/
+
+# Configuration overrides
+config.local.json
+settings.local.json
+
+# Development scripts
+dev/
+scripts/dev/
+
+# Profiling files
+*.prof
+*.pprof
+
+# Memory dumps
+*.dump
+*.core
+
+# =============================================================================
+# DEPENDENCIES & MODULES
+# =============================================================================
+
+# Go modules download cache
+$GOPATH/pkg/mod/
+
+# =============================================================================
+# AI
+# =============================================================================
+
+CLAUDE.md
+
+# =============================================================================
+# SECURITY REMINDER
+# =============================================================================
+# NEVER commit tokens, API keys, or sensitive data!
+# Use environment variables or external configuration files.
+# 
+# If you accidentally commit secrets:
+# 1. Rotate/revoke the compromised credentials immediately
+# 2. Use git filter-branch or BFG Repo-Cleaner to remove from history
+# 3. Force push the cleaned history
+# =============================================================================

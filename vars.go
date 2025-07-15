@@ -53,7 +53,28 @@ var (
 	queue           = []Song{}
 	queueMutex      sync.Mutex            // Mutex for thread-safe queue operations
 	metadataManager *MetadataManager      // Metadata manager for song caching
-	bufferManager   = NewBufferManager(5) // Increased from 3 to 5 songs for better skip performance
+	bufferManager   *BufferManager        // Pre-download buffer manager (initialized conditionally)
+	
+	// Error handling and command system
+	errorHandler    *ErrorHandler         // Global error handler
+	commandHandlers = []CommandHandler{   // Command handler system
+		&PlayHelpCommand{},
+		&PlayStuffCommand{},
+		&PlayKudasaiCommand{},
+		&PlayCommand{},
+		&StopCommand{},
+		&SkipCommand{},
+		&PauseCommand{},
+		&ResumeCommand{},
+		&QueueCommand{},
+		&RemoveCommand{},
+		&CacheCommand{},
+		&CacheClearCommand{},
+		&BufferStatusCommand{},
+		&MoveQueueCommand{},
+		&ShuffleQueueCommand{},
+		&EmergencyResetCommand{},
+	}
 )
 
 // Configuration constants for better maintainability
