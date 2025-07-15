@@ -16,7 +16,9 @@ import (
 // BufferManager handles pre-downloading songs to maintain a buffer
 type BufferManager struct {
 	downloadQueue []Song
-	downloading   map[string]bool // Track which songs are currently downloading
+	downloading   map[string]bool   // Track which songs are currently downloading
+	failedVideos  map[string]int    // Track failed download attempts per video ID
+	lastFailTime  map[string]time.Time // Track when each video last failed
 	mutex         sync.RWMutex
 	maxBuffer     int
 	session       *discordgo.Session
@@ -30,6 +32,8 @@ func NewBufferManager(maxBuffer int) *BufferManager {
 	return &BufferManager{
 		downloadQueue: make([]Song, 0),
 		downloading:   make(map[string]bool),
+		failedVideos:  make(map[string]int),
+		lastFailTime:  make(map[string]time.Time),
 		maxBuffer:     maxBuffer,
 		isActive:      false,
 		stopChan:      make(chan struct{}),
@@ -69,6 +73,8 @@ func (bm *BufferManager) StopBuffering() {
 
 	bm.downloadQueue = make([]Song, 0)
 	bm.downloading = make(map[string]bool)
+	bm.failedVideos = make(map[string]int)
+	bm.lastFailTime = make(map[string]time.Time)
 
 	log.Printf("INFO: Stopped buffer manager")
 }
@@ -95,6 +101,43 @@ func (bm *BufferManager) UpdateQueue(currentQueue []Song, currentPlayingIndex in
 	bm.downloadQueue = songsToBuffer
 
 	log.Printf("INFO: Updated buffer queue with %d songs to buffer", len(songsToBuffer))
+}
+
+// shouldSkipDownload checks if a video should be skipped due to previous failures
+func (bm *BufferManager) shouldSkipDownload(videoID string) bool {
+	const maxRetries = 3
+	const backoffDuration = 30 * time.Minute // Wait 30 minutes before retrying failed videos
+	
+	failures, hasFailed := bm.failedVideos[videoID]
+	if !hasFailed {
+		return false // Never failed, proceed with download
+	}
+	
+	// If failed too many times, permanently skip
+	if failures >= maxRetries {
+		return true
+	}
+	
+	// If failed recently, wait for backoff period
+	lastFail, hasTime := bm.lastFailTime[videoID]
+	if hasTime && time.Since(lastFail) < backoffDuration {
+		return true
+	}
+	
+	return false
+}
+
+// recordFailure records a download failure for a video
+func (bm *BufferManager) recordFailure(videoID string) {
+	bm.failedVideos[videoID]++
+	bm.lastFailTime[videoID] = time.Now()
+	
+	failures := bm.failedVideos[videoID]
+	if failures >= 3 {
+		log.Printf("WARN: Video %s permanently failed after %d attempts, will not retry", videoID, failures)
+	} else {
+		log.Printf("WARN: Video %s failed (attempt %d/3), will retry after 30 minutes", videoID, failures)
+	}
 }
 
 // PreDownloadInitialSongs downloads the first few songs before starting playback
@@ -192,6 +235,11 @@ func (bm *BufferManager) maintainBuffer() {
 					continue
 				}
 
+				// Skip if failed too many times or in backoff period
+				if bm.shouldSkipDownload(song.VidID) {
+					continue
+				}
+
 				songsToDownload = append(songsToDownload, song)
 			}
 			bm.mutex.RUnlock()
@@ -208,6 +256,10 @@ func (bm *BufferManager) maintainBuffer() {
 
 						bm.mutex.Lock()
 						delete(bm.downloading, s.VidID)
+						if !success {
+							// Record the failure for this video
+							bm.recordFailure(s.VidID)
+						}
 						bm.mutex.Unlock()
 
 						if success {
