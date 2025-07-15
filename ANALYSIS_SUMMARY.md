@@ -123,7 +123,7 @@ type Session struct {
 - ✅ State change notifications
 - ✅ Automatic resource cleanup
 
-### 6. **Application Architecture** (`main_improved.go`)
+### 6. **Application Architecture** (`main.go`)
 ```go
 // Clean application structure with proper lifecycle management
 type Application struct {
