@@ -15,8 +15,6 @@ import (
 
 // Bot Parameters
 var (
-	botToken        string
-	youtubeToken    string
 	searchRequested bool
 	stopRequested   bool         // Flag to prevent queue processing after stop command
 	stopMutex       sync.RWMutex // Mutex for thread-safe stopRequested access
@@ -47,7 +45,7 @@ var (
 	v               = new(VoiceInstance)
 	opts            = dca.StdEncodeOptions
 	client          = yt.Client{} // Enable debug mode
-	ctx             = context.Background()
+	ctx             context.Context // Assigned from main application context
 	song            = Song{}
 	searchQueue     = []SongSearch{}
 	queue           = []Song{}
