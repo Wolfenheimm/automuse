@@ -38,18 +38,18 @@ var (
 	s               *discordgo.Session
 	v               = new(VoiceInstance)
 	opts            = dca.StdEncodeOptions
-	client          = yt.Client{} // Enable debug mode
+	client          = yt.Client{}   // Enable debug mode
 	ctx             context.Context // Assigned from main application context
 	song            = Song{}
 	searchQueue     = []SongSearch{}
 	queue           = []Song{}
-	queueMutex      sync.Mutex            // Mutex for thread-safe queue operations
-	metadataManager *MetadataManager      // Metadata manager for song caching
-	bufferManager   *BufferManager        // Pre-download buffer manager (initialized conditionally)
-	
+	queueMutex      sync.Mutex       // Mutex for thread-safe queue operations
+	metadataManager *MetadataManager // Metadata manager for song caching
+	bufferManager   *BufferManager   // Pre-download buffer manager (initialized conditionally)
+
 	// Error handling and command system
-	errorHandler    *ErrorHandler         // Global error handler
-	commandHandlers = []CommandHandler{   // Command handler system
+	errorHandler    *ErrorHandler       // Global error handler
+	commandHandlers = []CommandHandler{ // Command handler system
 		&PlayHelpCommand{},
 		&PlayStuffCommand{},
 		&PlayKudasaiCommand{},
@@ -69,13 +69,11 @@ var (
 	}
 )
 
-
 // Initialize rate limiting resources
 func init() {
 	playlistSemaphore = make(chan struct{}, maxConcurrentPlaylists)
 	activeCommands = make(map[string]time.Time)
 }
-
 
 // Thread-safe functions for stopRequested flag
 func setStopRequested(value bool) {
@@ -102,8 +100,6 @@ func isPlaybackEnding() bool {
 	defer playbackMutex.RUnlock()
 	return playbackEnding
 }
-
-
 
 // Per-user rate limiting
 func checkUserRateLimit(userID string) bool {
@@ -166,4 +162,3 @@ func clearCommandActive(userID, command string) {
 	key := userID + ":" + command
 	delete(activeCommands, key)
 }
-
