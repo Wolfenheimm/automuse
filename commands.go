@@ -164,7 +164,6 @@ func stop(m *discordgo.MessageCreate) {
 	queueMutex.Unlock()
 
 	setStopRequested(true)       // Set flag to prevent additional queue processing
-	setPlaylistProcessing(false) // Force reset playlist processing flag
 	resetSearch()
 
 	// Stop buffer manager
@@ -193,7 +192,6 @@ func emergencyCleanup() {
 	log.Printf("INFO: Performing emergency cleanup")
 
 	// Reset all processing flags
-	setPlaylistProcessing(false)
 	setStopRequested(false)
 	setPlaybackEnding(false)
 	setPlaybackState(false) // Reset playback state
@@ -204,10 +202,7 @@ func emergencyCleanup() {
 	userRateLimit = make(map[string]time.Time)
 	userRateMutex.Unlock()
 
-	// Reset last playlist time to allow immediate processing if needed
-	playlistMutex.Lock()
-	lastPlaylistTime = time.Time{}
-	playlistMutex.Unlock()
+	// Note: Playlist processing is now handled by per-user rate limiting and semaphore
 
 	// Drain playlist semaphore in case it's blocked
 	select {
