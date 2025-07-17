@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	yt "github.com/kkdai/youtube/v2"
 )
 
 // This is the main function that plays the queue
@@ -258,10 +257,11 @@ func queueSingleSong(m *discordgo.MessageCreate, link string) {
 			strings.Contains(err.Error(), "disabled") ||
 			strings.Contains(err.Error(), "cipher") ||
 			strings.Contains(err.Error(), "signature") {
+			
 			log.Printf("[INFO] Attempting fallback with yt-dlp for restricted/problematic video")
 			s.ChannelMessageSend(m.ChannelID, "**[Muse]** Video has restrictions or compatibility issues, using enhanced method...")
 
-			// Try using yt-dlp as fallback for restricted videos
+			// Try using yt-dlp as fallback for restricted videos (including age-restricted)
 			if queueWithYtDlp(m, link) {
 				return // Success with yt-dlp
 			}
@@ -519,11 +519,36 @@ func queueWithYtDlp(m *discordgo.MessageCreate, link string) bool {
 
 	log.Printf("[INFO] Using yt-dlp fallback for video ID: %s", videoID)
 
-	// Use yt-dlp to get video info
-	cmd := exec.Command("yt-dlp", "--no-download", "--print", "title", "--print", "duration", link)
-	output, err := cmd.Output()
+	// Use yt-dlp to get video info with comprehensive age restriction bypass
+	var output []byte
+	var err error
+	
+	// Try different bypass methods in order of preference
+	bypasses := [][]string{
+		// Method 1: Basic age bypass
+		{"--no-download", "--print", "title", "--print", "duration", "--age-limit", "99", "--no-check-certificate"},
+		// Method 2: With Chrome cookies
+		{"--no-download", "--print", "title", "--print", "duration", "--age-limit", "99", "--no-check-certificate", "--cookies-from-browser", "chrome"},
+		// Method 3: With Safari cookies (macOS)
+		{"--no-download", "--print", "title", "--print", "duration", "--age-limit", "99", "--no-check-certificate", "--cookies-from-browser", "safari"},
+		// Method 4: With Firefox cookies
+		{"--no-download", "--print", "title", "--print", "duration", "--age-limit", "99", "--no-check-certificate", "--cookies-from-browser", "firefox"},
+	}
+	
+	for i, args := range bypasses {
+		cmd := exec.Command("yt-dlp", append(args, link)...)
+		output, err = cmd.Output()
+		if err == nil {
+			if i > 0 {
+				log.Printf("[INFO] yt-dlp succeeded with bypass method %d (using browser cookies)", i+1)
+			}
+			break
+		}
+		log.Printf("[DEBUG] yt-dlp bypass method %d failed: %v", i+1, err)
+	}
+	
 	if err != nil {
-		log.Printf("[ERROR] yt-dlp failed to get video info: %v", err)
+		log.Printf("[ERROR] All yt-dlp bypass methods failed: %v", err)
 		return false
 	}
 
@@ -586,12 +611,14 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** 🔍 Scanning playlist with enhanced method (this may take a moment)...")
 
-	// Get playlist info using yt-dlp
+	// Get playlist info using yt-dlp with age restriction bypass
 	cmd := exec.Command("yt-dlp",
 		"--flat-playlist",
 		"--print", "id",
 		"--print", "title",
 		"--no-warnings",
+		"--age-limit", "99",  // Bypass age restrictions
+		"--no-check-certificate", // Skip SSL verification if needed
 		playlistURL)
 
 	output, err := cmd.Output()
@@ -691,6 +718,8 @@ func queuePlaylistThreaded(playlistID string, m *discordgo.MessageCreate) {
 				"--no-download",
 				"--print", "duration_string",
 				"--no-warnings",
+				"--age-limit", "99",  // Bypass age restrictions
+				"--no-check-certificate", // Skip SSL verification if needed
 				videoURL)
 
 			durationOutput, err := durationCmd.Output()
@@ -779,58 +808,3 @@ processResults:
 	log.Printf("INFO: Threaded playlist processing completed for %d videos", len(videoData))
 }
 
-// getVideoMetadata fetches video metadata (title, duration) for a given video ID or URL
-func getVideoMetadata(videoIDOrURL string) (title, videoID, duration string, err error) {
-	var video *yt.Video
-
-	// Try YouTube client first
-	if strings.HasPrefix(videoIDOrURL, "http") {
-		video, err = client.GetVideo(videoIDOrURL)
-	} else {
-		video, err = client.GetVideo("https://www.youtube.com/watch?v=" + videoIDOrURL)
-	}
-
-	if err == nil {
-		return video.Title, video.ID, video.Duration.String(), nil
-	}
-
-	// If YouTube client fails, try yt-dlp for metadata only
-	log.Printf("[DEBUG] YouTube client failed for %s, trying yt-dlp: %v", videoIDOrURL, err)
-
-	var url string
-	if strings.HasPrefix(videoIDOrURL, "http") {
-		url = videoIDOrURL
-		// Extract video ID from URL
-		if strings.Contains(url, "youtube.com/watch?v=") {
-			parts := strings.Split(url, "v=")
-			if len(parts) > 1 {
-				videoID = strings.Split(parts[1], "&")[0]
-			}
-		} else if strings.Contains(url, "youtu.be/") {
-			parts := strings.Split(url, "youtu.be/")
-			if len(parts) > 1 {
-				videoID = strings.Split(parts[1], "?")[0]
-			}
-		}
-	} else {
-		videoID = videoIDOrURL
-		url = "https://www.youtube.com/watch?v=" + videoID
-	}
-
-	// Use yt-dlp to get metadata
-	cmd := exec.Command("yt-dlp", "--no-download", "--print", "title", "--print", "duration", url)
-	output, cmdErr := cmd.Output()
-	if cmdErr != nil {
-		return "", videoID, "", fmt.Errorf("both YouTube client and yt-dlp failed: %v, %v", err, cmdErr)
-	}
-
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(lines) < 2 {
-		return "", videoID, "", fmt.Errorf("yt-dlp returned unexpected output format")
-	}
-
-	title = strings.TrimSpace(lines[0])
-	duration = strings.TrimSpace(lines[1])
-
-	return title, videoID, duration, nil
-}

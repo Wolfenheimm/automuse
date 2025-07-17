@@ -131,22 +131,40 @@ func (v *VoiceInstance) DCA(path string, isMpeg bool, useExistingConnection bool
 			env := os.Environ()
 			env = append(env, "YT_TOKEN="+os.Getenv("YT_TOKEN"))
 
-			// Use yt-dlp to download audio in MP3 format
-			cmd := exec.Command("yt-dlp",
-				"--no-playlist",         // Don't download playlists
-				"-x",                    // Extract audio
-				"--audio-format", "mp3", // Convert to MP3
-				"--audio-quality", "256K", // Increased from 192K to 256K for better quality
-				"--no-warnings", // Reduce noise in logs
-				"--progress",    // Show progress
-				"-o", mp3Path,   // Output file
-				originalURL) // Original YouTube URL
-
-			cmd.Env = env
-			output, err := cmd.CombinedOutput()
-			if err != nil {
-				log.Printf("ERROR: Failed to download audio: %v", err)
-				log.Printf("yt-dlp output: %s", string(output))
+			// Use yt-dlp to download audio in MP3 format with comprehensive age restriction bypass
+			var downloadErr error
+			
+			// Try different bypass methods in order of preference
+			bypasses := [][]string{
+				// Method 1: Basic age bypass
+				{"--no-playlist", "-x", "--audio-format", "mp3", "--audio-quality", "256K", "--no-warnings", "--progress", "--age-limit", "99", "--no-check-certificate", "-o", mp3Path},
+				// Method 2: With Chrome cookies
+				{"--no-playlist", "-x", "--audio-format", "mp3", "--audio-quality", "256K", "--no-warnings", "--progress", "--age-limit", "99", "--no-check-certificate", "--cookies-from-browser", "chrome", "-o", mp3Path},
+				// Method 3: With Safari cookies (macOS)
+				{"--no-playlist", "-x", "--audio-format", "mp3", "--audio-quality", "256K", "--no-warnings", "--progress", "--age-limit", "99", "--no-check-certificate", "--cookies-from-browser", "safari", "-o", mp3Path},
+				// Method 4: With Firefox cookies
+				{"--no-playlist", "-x", "--audio-format", "mp3", "--audio-quality", "256K", "--no-warnings", "--progress", "--age-limit", "99", "--no-check-certificate", "--cookies-from-browser", "firefox", "-o", mp3Path},
+			}
+			
+			for i, args := range bypasses {
+				cmd := exec.Command("yt-dlp", append(args, originalURL)...)
+				cmd.Env = env
+				_, downloadErr = cmd.CombinedOutput()
+				if downloadErr == nil {
+					if i > 0 {
+						log.Printf("INFO: yt-dlp download succeeded with bypass method %d (using browser cookies)", i+1)
+					}
+					break
+				}
+				log.Printf("DEBUG: yt-dlp download bypass method %d failed: %v", i+1, downloadErr)
+				if i < len(bypasses)-1 {
+					// Clean up partial file before next attempt
+					os.Remove(mp3Path)
+				}
+			}
+			
+			if downloadErr != nil {
+				log.Printf("ERROR: All yt-dlp download bypass methods failed: %v", downloadErr)
 				// Clean up partial file if it exists
 				os.Remove(mp3Path)
 				return
