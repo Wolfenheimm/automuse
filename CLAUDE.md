@@ -7,26 +7,29 @@ This file provides comprehensive guidance to Claude Code (claude.ai/code) when w
 **AutoMuse** is a high-performance Discord music bot written in Go that provides premium YouTube music streaming capabilities with advanced features like queue management, intelligent caching, pre-download buffering, comprehensive audio processing, and robust age-restricted content support.
 
 ### Core Features
-- 🎵 **YouTube Integration** - Play individual videos and entire playlists with comprehensive fallback support
-- 🚀 **High Performance** - Built in Go for optimal speed and memory efficiency
-- 🔊 **Premium Audio Quality** - 256kbps downloads with 128kbps Opus streaming
-- 📋 **Advanced Queue Management** - Move, shuffle, remove, and organize music queues
-- 🔍 **YouTube Search** - Built-in search with result selection
-- 💾 **Intelligent Caching** - Smart metadata management with duplicate detection
-- ⚡ **Pre-Download Buffer** - 5-song lookahead for zero-latency skipping
-- 🎛️ **Comprehensive Controls** - Skip, pause, resume, stop, and emergency reset
-- 📊 **Cache Analytics** - Track usage statistics and manage storage
-- 🔄 **Concurrent Processing** - Parallel downloads for faster playlist loading
-- 🛡️ **Memory Safety** - Optimized audio buffer settings and resource management
-- 🔞 **Age-Restricted Content** - Multi-method bypass system with browser cookie extraction
+
+- **YouTube Integration** - Play individual videos and entire playlists with comprehensive fallback support
+- **High Performance** - Built in Go for optimal speed and memory efficiency
+- **Premium Audio Quality** - 256kbps downloads with 128kbps Opus streaming
+- **Advanced Queue Management** - Move, shuffle, remove, and organize music queues
+- **YouTube Search** - Built-in search with result selection
+- **Intelligent Caching** - Smart metadata management with duplicate detection
+- **Pre-Download Buffer** - 5-song lookahead for zero-latency skipping
+- **Comprehensive Controls** - Skip, pause, resume, stop, and emergency reset
+- **Cache Analytics** - Track usage statistics and manage storage
+- **Concurrent Processing** - Parallel downloads for faster playlist loading
+- **Memory Safety** - Optimized audio buffer settings and resource management
+- **Age-Restricted Content** - Multi-method bypass system with browser cookie extraction
 
 ## Architecture & Technology Stack
 
 ### Language & Runtime
+
 - **Go 1.24.4** - Primary programming language
 - **Module**: `automuse` (local module)
 
 ### Core Dependencies
+
 ```go
 // Discord Integration
 github.com/bwmarrin/discordgo v0.28.1
@@ -45,6 +48,7 @@ gopkg.in/natefinch/lumberjack.v2 v2.2.1
 ```
 
 ### External Dependencies
+
 - **FFmpeg** - Audio transcoding and format conversion (Required)
 - **yt-dlp** - YouTube downloading with age restriction bypass (Required)
 - **opus-tools** - Audio encoding optimization (Optional)
@@ -57,10 +61,10 @@ automuse/
 ├── main.go                    # Professional application entry point with DI
 ├── go.mod                     # Go module definition
 ├── go.sum                     # Dependency checksums
-├── 
+├──
 ├── # Core Bot Logic
 ├── commands.go                # Discord command handlers with structured approach
-├── discord.go                # Discord session management  
+├── discord.go                # Discord session management
 ├── voice.go                  # Voice channel utilities
 ├── queue.go                  # Queue management and playlist processing
 ├── youtube.go                # YouTube API integration
@@ -108,6 +112,7 @@ automuse/
 ### 1. Application Entry Point
 
 **Professional Application Structure** (`main.go`):
+
 ```go
 // Main application structure with dependency injection
 type Application struct {
@@ -134,6 +139,7 @@ func main() {
 ```
 
 **Key Architecture Features**:
+
 - **Dependency Injection**: All components properly injected
 - **Context-Based Cancellation**: Graceful shutdown handling
 - **Structured Logging**: Rich contextual logging throughout
@@ -168,6 +174,7 @@ type CommandHandler interface {
 ```
 
 **Command Processing Flow**:
+
 1. Message received from Discord
 2. Rate limiting and validation checks
 3. Command deduplication and active command tracking
@@ -182,6 +189,7 @@ YouTube URL → yt-dlp (Multi-Method Bypass) → MP3 Cache → FFmpeg → DCA En
 ```
 
 **Age-Restricted Content Support**:
+
 ```go
 // Comprehensive bypass strategy with multiple fallback methods
 bypasses := [][]string{
@@ -197,6 +205,7 @@ bypasses := [][]string{
 ```
 
 **Key Components**:
+
 - **YouTube Integration** (`youtube.go`): Video metadata and stream URL extraction
 - **Multi-Method Bypass** (`queue.go`, `dca.go`, `buffer.go`): Comprehensive age restriction handling
 - **Cache Management** (`metadata.go`): Intelligent file caching with duplicate detection and analytics
@@ -206,6 +215,7 @@ bypasses := [][]string{
 ### 4. Queue Management System
 
 **Thread-Safe Design**:
+
 ```go
 var (
     queue      = []Song{}
@@ -220,6 +230,7 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) // Queue playback engi
 ```
 
 **Advanced Features**:
+
 - FIFO queue with position management and skip-to functionality
 - Playlist processing with concurrency limits (3 simultaneous)
 - Comprehensive queue manipulation (move, shuffle, remove)
@@ -230,6 +241,7 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) // Queue playback engi
 ### 5. Configuration Management
 
 **Centralized Configuration System** (`config/config.go`):
+
 ```go
 type Config struct {
     Discord  DiscordConfig  // Bot token, reconnection settings, sharding
@@ -252,6 +264,7 @@ func LoadConfig() (*Config, error) {
 ```
 
 **Thread-Safe Global Variables** (`vars.go`):
+
 ```go
 // Thread-safe global state for performance-critical operations
 var (
@@ -271,6 +284,7 @@ var (
 ### 6. Error Handling Framework
 
 **Structured Error Types** (`errors.go`):
+
 ```go
 type AutoMuseError struct {
     Type         string                    // Error classification
@@ -292,6 +306,7 @@ func NewVoiceError(message, userMessage string, err error) *AutoMuseError
 ```
 
 **Error Handler with Context** (`errors.go`):
+
 ```go
 type ErrorHandler struct {
     session *discordgo.Session
@@ -309,6 +324,7 @@ func (eh *ErrorHandler) Handle(err error, channelID string) {
 ### 7. Logging & Monitoring
 
 **Structured Logging System** (`pkg/logger/logger.go`):
+
 ```go
 // Rich contextual logging with zerolog integration
 logger.WithUser(userID, username).
@@ -328,6 +344,7 @@ logger.LogShutdown(reason, graceful)
 ```
 
 **Performance Metrics** (`pkg/metrics/metrics.go`):
+
 ```go
 // Comprehensive metrics collection (optional feature)
 metrics.RecordCommandExecution(command, success, duration)
@@ -473,7 +490,7 @@ var (
 func checkUserRateLimit(userID string) bool {
     userRateMutex.Lock()
     defer userRateMutex.Unlock()
-    
+
     lastTime, exists := userRateLimit[userID]
     if !exists || time.Since(lastTime) >= 3*time.Second {
         userRateLimit[userID] = time.Now()
@@ -489,13 +506,13 @@ var playlistSemaphore = make(chan struct{}, maxConcurrentPlaylists)
 func isCommandActive(userID, command string) bool {
     commandMutex.RLock()
     defer commandMutex.RUnlock()
-    
+
     key := userID + ":" + command
     lastTime, exists := activeCommands[key]
     if !exists {
         return false
     }
-    
+
     // Different timeouts for different command types
     if command == "playlist" {
         return time.Since(lastTime) < 10*time.Second
@@ -507,6 +524,7 @@ func isCommandActive(userID, command string) bool {
 ### 3. Intelligent Caching with Analytics
 
 **Duplicate Detection**:
+
 ```go
 func (mm *MetadataManager) FindSimilarSongs(title string, threshold float64) []SongMetadata {
     // Advanced string similarity matching for duplicate detection
@@ -516,6 +534,7 @@ func (mm *MetadataManager) FindSimilarSongs(title string, threshold float64) []S
 ```
 
 **Cache Analytics**:
+
 ```go
 func (mm *MetadataManager) GetDetailedStats() CacheStats {
     return CacheStats{
@@ -531,6 +550,7 @@ func (mm *MetadataManager) GetDetailedStats() CacheStats {
 ```
 
 **Cache Cleanup with Age-Based Management**:
+
 ```go
 func (mm *MetadataManager) CleanupOldFiles(maxAge time.Duration) error {
     // Identify files older than specified age
@@ -543,6 +563,7 @@ func (mm *MetadataManager) CleanupOldFiles(maxAge time.Duration) error {
 ### 4. Buffer Management with Failure Recovery
 
 **Pre-Download Strategy with Comprehensive Error Handling**:
+
 ```go
 type BufferManager struct {
     bufferSize      int                    // 5 songs default
@@ -570,6 +591,7 @@ func (bm *BufferManager) shouldSkipDownload(song Song) bool {
 ### 5. Age-Restricted Content Processing
 
 **Multi-Method Bypass Strategy**:
+
 ```go
 func processAgeRestrictedContent(url string) ([]byte, error) {
     // Comprehensive bypass methods with fallback strategy
@@ -583,7 +605,7 @@ func processAgeRestrictedContent(url string) ([]byte, error) {
         // Method 4: Firefox cookies (cross-platform fallback)
         {"--age-limit", "99", "--no-check-certificate", "--cookies-from-browser", "firefox"},
     }
-    
+
     for i, args := range bypasses {
         cmd := exec.Command("yt-dlp", append(args, url)...)
         output, err := cmd.Output()
@@ -595,7 +617,7 @@ func processAgeRestrictedContent(url string) ([]byte, error) {
         }
         log.Printf("Bypass method %d failed: %v", i+1, err)
     }
-    
+
     return nil, fmt.Errorf("all bypass methods failed")
 }
 ```
@@ -629,58 +651,59 @@ opts.PacketLoss = 1                  // Packet loss compensation
 
 ### Age-Restricted Content Success Rates
 
-| Method | Description | Success Rate | Notes |
-|--------|-------------|--------------|-------|
-| Method 1 | Basic `--age-limit 99` | ~40% | Fast, limited effectiveness |
-| Method 2 | Chrome cookies | ~80% | High success, most common |
-| Method 3 | Safari cookies | ~75% | macOS optimized |
-| Method 4 | Firefox cookies | ~70% | Cross-platform backup |
-| **Combined** | **All methods** | **~95%** | **Comprehensive coverage** |
+| Method       | Description            | Success Rate | Notes                       |
+| ------------ | ---------------------- | ------------ | --------------------------- |
+| Method 1     | Basic `--age-limit 99` | ~40%         | Fast, limited effectiveness |
+| Method 2     | Chrome cookies         | ~80%         | High success, most common   |
+| Method 3     | Safari cookies         | ~75%         | macOS optimized             |
+| Method 4     | Firefox cookies        | ~70%         | Cross-platform backup       |
+| **Combined** | **All methods**        | **~95%**     | **Comprehensive coverage**  |
 
 ## Command Reference
 
 ### Music Playback Commands
 
-| Command | Description | Example | Enhanced Features |
-|---------|-------------|---------|-------------------|
-| `play [URL]` | Play YouTube video | `play https://youtube.com/watch?v=dQw4w9WgXcQ` | Age-restricted support |
-| `play [search]` | Search and select | `play never gonna give you up` | Interactive selection |
-| `play [number]` | Play from search | `play 3` | Quick selection |
-| `skip` | Skip current song | `skip` | Shows next song info |
-| `skip [number]` | Skip to position | `skip 5` | Position validation |
-| `stop` | Stop and clear queue | `stop` | Emergency cleanup |
-| `pause` | Pause playback | `pause` | State preservation |
-| `resume` | Resume playback | `resume` | State restoration |
+| Command         | Description          | Example                                        | Enhanced Features      |
+| --------------- | -------------------- | ---------------------------------------------- | ---------------------- |
+| `play [URL]`    | Play YouTube video   | `play https://youtube.com/watch?v=dQw4w9WgXcQ` | Age-restricted support |
+| `play [search]` | Search and select    | `play never gonna give you up`                 | Interactive selection  |
+| `play [number]` | Play from search     | `play 3`                                       | Quick selection        |
+| `skip`          | Skip current song    | `skip`                                         | Shows next song info   |
+| `skip [number]` | Skip to position     | `skip 5`                                       | Position validation    |
+| `stop`          | Stop and clear queue | `stop`                                         | Emergency cleanup      |
+| `pause`         | Pause playback       | `pause`                                        | State preservation     |
+| `resume`        | Resume playback      | `resume`                                       | State restoration      |
 
 ### Queue Management Commands
 
-| Command | Description | Example | Advanced Features |
-|---------|-------------|---------|-------------------|
-| `queue` | Show current queue | `queue` | Intelligent pagination |
-| `remove [number]` | Remove song | `remove 3` | Position validation |
-| `move [from] [to]` | Move song position | `move 2 5` | Range validation |
-| `shuffle` | Shuffle queue | `shuffle` | Minimum size check |
+| Command            | Description        | Example    | Advanced Features      |
+| ------------------ | ------------------ | ---------- | ---------------------- |
+| `queue`            | Show current queue | `queue`    | Intelligent pagination |
+| `remove [number]`  | Remove song        | `remove 3` | Position validation    |
+| `move [from] [to]` | Move song position | `move 2 5` | Range validation       |
+| `shuffle`          | Shuffle queue      | `shuffle`  | Minimum size check     |
 
 ### System Commands
 
-| Command | Description | Example | Professional Features |
-|---------|-------------|---------|----------------------|
-| `cache` | Show cache stats | `cache` | Detailed analytics |
-| `cache-clear` | Clear old cache | `cache-clear` | Age-based cleanup (7 days) |
-| `buffer-status` | Show buffer status | `buffer-status` | Real-time diagnostics |
-| `emergency-reset` | Emergency reset | `reset` | Complete system recovery |
+| Command           | Description        | Example         | Professional Features      |
+| ----------------- | ------------------ | --------------- | -------------------------- |
+| `cache`           | Show cache stats   | `cache`         | Detailed analytics         |
+| `cache-clear`     | Clear old cache    | `cache-clear`   | Age-based cleanup (7 days) |
+| `buffer-status`   | Show buffer status | `buffer-status` | Real-time diagnostics      |
+| `emergency-reset` | Emergency reset    | `reset`         | Complete system recovery   |
 
 ### Special Commands
 
-| Command | Description | Purpose | Implementation |
-|---------|-------------|---------|----------------|
-| `play help` | Show help message | User guidance | Comprehensive documentation |
-| `play stuff` | Queue local files | Quick testing | Local MP3 folder |
-| `play kudasai` | Queue specific playlist | Quick access | Predefined content |
+| Command        | Description             | Purpose       | Implementation              |
+| -------------- | ----------------------- | ------------- | --------------------------- |
+| `play help`    | Show help message       | User guidance | Comprehensive documentation |
+| `play stuff`   | Queue local files       | Quick testing | Local MP3 folder            |
+| `play kudasai` | Queue specific playlist | Quick access  | Predefined content          |
 
 ## Environment Variables
 
 ### Required Variables
+
 ```bash
 # Core authentication (REQUIRED)
 BOT_TOKEN="your_discord_bot_token"     # Discord bot authentication
@@ -688,6 +711,7 @@ YT_TOKEN="your_youtube_api_key"        # YouTube Data API v3 key
 ```
 
 ### Optional Configuration
+
 ```bash
 # Debugging and development
 DEBUG="false"                          # Enable debug logging
@@ -713,6 +737,7 @@ LOG_FILE="logs/automuse.log"           # Log file location
 ### 1. Code Organization
 
 **Modular Architecture**:
+
 - `main.go` - Professional application entry with dependency injection
 - `commands.go` - Structured command handlers with comprehensive coverage
 - `queue.go` - Thread-safe queue management with advanced features
@@ -724,6 +749,7 @@ LOG_FILE="logs/automuse.log"           # Log file location
 ### 2. Concurrency Patterns
 
 **Goroutine Usage with Safety**:
+
 ```go
 // Command processing with panic recovery
 go func() {
@@ -744,6 +770,7 @@ go func() {
 ```
 
 **Synchronization with Comprehensive Patterns**:
+
 - **Mutexes**: Protect shared state (queue, flags, rate limits)
 - **Channels**: Goroutine communication and signaling
 - **Semaphores**: Resource limiting (playlist processing)
@@ -753,6 +780,7 @@ go func() {
 ### 3. Error Handling Strategy
 
 **Layered Error Handling Approach**:
+
 1. **Internal Errors**: Detailed logging with full context and stack traces
 2. **User Errors**: Friendly Discord messages with helpful guidance
 3. **System Errors**: Structured alerts with recovery procedures
@@ -774,12 +802,14 @@ defer func() {
 ### 4. Resource Management
 
 **Memory Management with Safety**:
+
 - Limited audio buffers to prevent memory exhaustion (200 frames max)
 - Intelligent cache cleanup with age-based expiration (7 days default)
 - Goroutine lifecycle management with proper cleanup
 - Connection pooling for Discord/YouTube with reconnection logic
 
 **File Management with Reliability**:
+
 - Automatic cache directory creation with permission checks
 - Atomic metadata synchronization to prevent corruption
 - Temporary file cleanup with error handling
@@ -788,12 +818,14 @@ defer func() {
 ### 5. Testing & Debugging
 
 **Debug Mode Features**:
+
 ```bash
 export DEBUG="true"
 ./automuse
 ```
 
 **Enhanced Debug Capabilities**:
+
 - Verbose logging for all operations with correlation IDs
 - Command execution tracing with performance metrics
 - Audio pipeline monitoring with buffer status
@@ -803,6 +835,7 @@ export DEBUG="true"
 **Common Debug Scenarios with Solutions**:
 
 **Audio Issues**:
+
 ```bash
 # Comprehensive audio system validation
 ffmpeg -version                        # Verify FFmpeg installation
@@ -815,6 +848,7 @@ grep "bypass method" logs/automuse.log
 ```
 
 **Discord Issues**:
+
 ```bash
 # Discord connectivity and permissions validation
 # Check Discord Developer Portal for bot permissions
@@ -823,6 +857,7 @@ grep "bypass method" logs/automuse.log
 ```
 
 **YouTube Issues**:
+
 ```bash
 # API and fallback system validation
 curl "https://www.googleapis.com/youtube/v3/search?part=snippet&q=test&key=$YT_TOKEN"
@@ -836,12 +871,14 @@ yt-dlp --cookies-from-browser firefox --age-limit 99 --print title "URL"
 ## Performance Characteristics
 
 ### Memory Usage (Optimized)
+
 - **Audio Buffer**: ~4 seconds (200 frames × 48kHz × 2 bytes × 2 channels = ~384KB)
 - **Cache Metadata**: JSON-based lightweight storage (~1KB per song)
 - **Queue Management**: Minimal memory footprint with efficient data structures
 - **Goroutine Pool**: Managed lifecycle with proper cleanup (typically <50 goroutines)
 
 ### Latency Optimization
+
 - **Skip Performance**: Pre-downloaded buffer for instant skipping (<100ms)
 - **Playlist Loading**: Parallel processing (2-4 concurrent downloads)
 - **Voice Connection**: Persistent connections between songs
@@ -849,6 +886,7 @@ yt-dlp --cookies-from-browser firefox --age-limit 99 --print title "URL"
 - **Age Bypass**: Browser cookie extraction cached for session duration
 
 ### Throughput Capabilities
+
 - **Concurrent Playlists**: Up to 3 simultaneous with semaphore control
 - **Download Speed**: Optimized yt-dlp with parallel processing
 - **Queue Size**: 500 songs maximum (configurable)
@@ -856,6 +894,7 @@ yt-dlp --cookies-from-browser firefox --age-limit 99 --print title "URL"
 - **Command Processing**: Deduplication prevents duplicate processing
 
 ### Success Rates (Measured)
+
 - **Regular Videos**: 98% success rate
 - **Age-Restricted Content**: 95% success rate (multi-method bypass)
 - **Playlists**: 92% success rate (enhanced yt-dlp processing)
@@ -865,6 +904,7 @@ yt-dlp --cookies-from-browser firefox --age-limit 99 --print title "URL"
 ## Deployment & Operations
 
 ### System Requirements
+
 - **Go 1.22+** - Runtime environment with module support
 - **FFmpeg** - Audio processing (Required)
 - **yt-dlp** - YouTube downloading with age bypass (Required)
@@ -873,6 +913,7 @@ yt-dlp --cookies-from-browser firefox --age-limit 99 --print title "URL"
 - **Browser Installation** - Chrome/Safari/Firefox for cookie extraction
 
 ### Production Configuration
+
 ```bash
 # Production environment variables
 export BOT_TOKEN="your_production_bot_token"
@@ -884,6 +925,7 @@ export CACHE_DIR="/var/cache/automuse"
 ```
 
 ### Docker Deployment
+
 ```dockerfile
 FROM golang:1.24-alpine AS builder
 WORKDIR /app
@@ -897,6 +939,7 @@ CMD ["automuse"]
 ```
 
 ### Monitoring & Alerts
+
 - **Structured Logging**: JSON logs for aggregation and analysis
 - **Metrics Collection**: Prometheus-compatible metrics (optional)
 - **Health Checks**: HTTP endpoint for service monitoring
@@ -906,6 +949,7 @@ CMD ["automuse"]
 ### Maintenance Procedures
 
 **Cache Management**:
+
 ```bash
 # Automated cache cleanup (runs daily)
 automuse cache-clear  # Removes files older than 7 days
@@ -915,6 +959,7 @@ automuse cache        # Shows detailed cache statistics
 ```
 
 **Log Rotation** (automated with lumberjack):
+
 - Maximum log size: 100MB
 - Backup retention: 5 files
 - Age-based cleanup: 30 days
@@ -923,6 +968,7 @@ automuse cache        # Shows detailed cache statistics
 ## Security Considerations
 
 ### Token Management (Critical)
+
 - **Never commit tokens** to version control (enforced by .gitignore)
 - **Environment variables only** - no hardcoded credentials
 - **Token rotation** - implement regular rotation procedures
@@ -930,6 +976,7 @@ automuse cache        # Shows detailed cache statistics
 - **Scope limitation** - minimal required permissions only
 
 ### Input Validation & Sanitization
+
 - **URL validation** for YouTube links with comprehensive checking
 - **Command parameter sanitization** to prevent injection
 - **Rate limiting** per user/guild with configurable limits
@@ -937,6 +984,7 @@ automuse cache        # Shows detailed cache statistics
 - **File path validation** to prevent directory traversal
 
 ### Resource Protection
+
 - **Memory usage limits** with configurable bounds
 - **Disk space monitoring** with automatic cleanup
 - **Connection limits** to prevent resource exhaustion
@@ -944,6 +992,7 @@ automuse cache        # Shows detailed cache statistics
 - **Goroutine limits** to prevent resource leaks
 
 ### Browser Cookie Security
+
 - **Read-only access** to browser cookie databases
 - **No cookie modification** or storage
 - **Temporary extraction** with immediate cleanup
@@ -952,6 +1001,7 @@ automuse cache        # Shows detailed cache statistics
 ## Future Enhancement Opportunities
 
 ### Planned Features (Roadmap)
+
 1. **Database Integration** - PostgreSQL for persistent metadata and analytics
 2. **Web Dashboard** - Real-time monitoring, control, and analytics interface
 3. **Multi-Guild Isolation** - Per-guild configurations and independent queues
@@ -960,6 +1010,7 @@ automuse cache        # Shows detailed cache statistics
 6. **User Permissions** - Role-based command access and administrative controls
 
 ### Experimental Features (Future Research)
+
 - **AI Integration** - Smart song recommendations based on listening history
 - **Voice Recognition** - Voice commands for hands-free control
 - **Cross-Platform Support** - Spotify, SoundCloud, Apple Music integration
@@ -967,6 +1018,7 @@ automuse cache        # Shows detailed cache statistics
 - **Advanced Analytics** - Machine learning for usage pattern analysis
 
 ### Performance Enhancements
+
 - **CDN Integration** - Distributed cache for faster content delivery
 - **Streaming Optimization** - Adaptive bitrate and quality selection
 - **Parallel Processing** - Enhanced concurrent download capabilities
@@ -977,36 +1029,42 @@ automuse cache        # Shows detailed cache statistics
 ### Common Issues & Solutions
 
 **Bot Won't Start**:
+
 1. Verify environment variables (`BOT_TOKEN`, `YT_TOKEN`)
 2. Check Go version compatibility (1.22+)
 3. Validate Discord token in Developer Portal
 4. Ensure required dependencies are installed
 
 **No Audio Playback**:
+
 1. Test FFmpeg installation: `ffmpeg -version`
 2. Update yt-dlp: `pip install --upgrade yt-dlp`
 3. Check network connectivity and firewall rules
 4. Verify voice channel permissions for bot
 
 **Age-Restricted Content Fails**:
+
 1. Ensure browser is installed (Chrome/Safari/Firefox)
 2. Log into YouTube in browser to establish cookies
 3. Check yt-dlp version supports cookie extraction
 4. Verify browser cookie database permissions
 
 **Memory Issues**:
+
 1. Check buffer settings (BufferedFrames = 200, not 17000!)
 2. Monitor cache size and enable automatic cleanup
 3. Review goroutine count in logs
 4. Enable garbage collection logging for analysis
 
 **Performance Problems**:
+
 1. Enable metrics collection: `ENABLE_METRICS=true`
 2. Monitor resource usage with system tools
 3. Review concurrent limits in configuration
 4. Optimize cache cleanup intervals
 
 **Queue Processing Errors**:
+
 1. Check rate limiting settings and user cooldowns
 2. Verify playlist size limits (100 songs default)
 3. Monitor semaphore usage for concurrent processing
@@ -1035,6 +1093,7 @@ grep "bypass method" logs/automuse.log # Age bypass success
 ## Integration Examples
 
 ### Discord Bot Setup
+
 ```go
 // Professional bot initialization with comprehensive features
 session, err := discordgo.New("Bot " + config.Discord.Token)
@@ -1050,6 +1109,7 @@ session.AddHandler(handleVoiceUpdate) // Voice state tracking
 ```
 
 ### YouTube API Integration
+
 ```go
 // Professional YouTube service with error handling
 service, err := youtube.NewService(ctx, option.WithAPIKey(config.YouTube.APIKey))
