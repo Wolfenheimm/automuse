@@ -15,6 +15,7 @@ type Config struct {
 	Audio    AudioConfig    `json:"audio"`
 	Queue    QueueConfig    `json:"queue"`
 	Cache    CacheConfig    `json:"cache"`
+	History  HistoryConfig  `json:"history"`
 	Logging  LoggingConfig  `json:"logging"`
 	Features FeatureConfig  `json:"features"`
 }
@@ -78,6 +79,18 @@ type CacheConfig struct {
 	BufferSize        int           `json:"buffer_size"`
 	EnablePredownload bool          `json:"enable_predownload"`
 	CompressionLevel  int           `json:"compression_level"`
+}
+
+// HistoryConfig holds song history configuration
+type HistoryConfig struct {
+	MaxEntries        int           `json:"max_entries"`         // Maximum history entries per guild
+	EnablePersistence bool          `json:"enable_persistence"`  // Whether to persist history to disk
+	EnableAutosave    bool          `json:"enable_autosave"`     // Auto-save after each addition
+	DataFile          string        `json:"data_file"`           // File to store history data
+	CleanupInterval   time.Duration `json:"cleanup_interval"`    // How often to cleanup old entries
+	MaxAge            time.Duration `json:"max_age"`             // Maximum age of history entries
+	ShowPlayDuration  bool          `json:"show_play_duration"`  // Show how long songs were played
+	ShowRelativeTime  bool          `json:"show_relative_time"`  // Show relative time (e.g., "2 hours ago")
 }
 
 // LoggingConfig holds logging configuration
@@ -159,6 +172,16 @@ func DefaultConfig() *Config {
 			BufferSize:        5,
 			EnablePredownload: true,
 			CompressionLevel:  6,
+		},
+		History: HistoryConfig{
+			MaxEntries:        50,                   // Store last 50 songs per guild
+			EnablePersistence: true,                 // Persist history to disk
+			EnableAutosave:    true,                 // Auto-save after each addition
+			DataFile:          "downloads/history.json", // Store alongside cache
+			CleanupInterval:   24 * time.Hour,       // Daily cleanup
+			MaxAge:            30 * 24 * time.Hour,  // Keep history for 30 days
+			ShowPlayDuration:  true,                 // Show how long songs played
+			ShowRelativeTime:  true,                 // Show relative timestamps
 		},
 		Logging: LoggingConfig{
 			Level:            "INFO",
@@ -242,6 +265,25 @@ func LoadConfig() (*Config, error) {
 		config.Features.EnableMetrics = true
 	}
 
+	// History configuration
+	if maxHistoryEntries := os.Getenv("MAX_HISTORY_ENTRIES"); maxHistoryEntries != "" {
+		if entries, err := strconv.Atoi(maxHistoryEntries); err == nil && entries > 0 {
+			config.History.MaxEntries = entries
+		}
+	}
+
+	if historyFile := os.Getenv("HISTORY_FILE"); historyFile != "" {
+		config.History.DataFile = historyFile
+	}
+
+	if enableHistoryPersistence := os.Getenv("ENABLE_HISTORY_PERSISTENCE"); enableHistoryPersistence == "false" {
+		config.History.EnablePersistence = false
+	}
+
+	if enableHistoryAutosave := os.Getenv("ENABLE_HISTORY_AUTOSAVE"); enableHistoryAutosave == "false" {
+		config.History.EnableAutosave = false
+	}
+
 	// Validate required configuration
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("configuration validation failed: %w", err)
@@ -297,6 +339,15 @@ func (c *Config) Validate() error {
 
 	if c.Cache.BufferSize <= 0 {
 		errors = append(errors, "buffer size must be greater than 0")
+	}
+
+	// Validate history configuration
+	if c.History.MaxEntries <= 0 {
+		errors = append(errors, "max history entries must be greater than 0")
+	}
+
+	if c.History.MaxEntries > 1000 {
+		errors = append(errors, "max history entries cannot exceed 1000 (performance limitation)")
 	}
 
 	// Validate logging configuration

@@ -477,6 +477,7 @@ func showHelp(m *discordgo.MessageCreate) {
 	helpMessage += "`remove [number]` - Remove a song from the queue at position\n"
 	helpMessage += "`move [from] [to]` - Move a song from one position to another\n"
 	helpMessage += "`shuffle` - Shuffle the current queue\n"
+	helpMessage += "`history` - Show recently played songs in this server\n"
 	helpMessage += "`cache` - Show cache statistics and information\n"
 	helpMessage += "`cache-clear` - Clear old cached songs (older than 7 days)\n"
 	helpMessage += "`buffer-status` - Show buffer manager status and download queue\n\n"
@@ -699,6 +700,18 @@ func emergencyResetCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 	queue = []Song{}
 	queueMutex.Unlock()
 
+	// Record interrupted song in history before clearing
+	if historyManager != nil && v.nowPlaying.Title != "" && !v.playStartTime.IsZero() {
+		playDuration := time.Since(v.playStartTime)
+		guildName := ""
+		if guild, err := s.State.Guild(m.GuildID); err == nil {
+			guildName = guild.Name
+		}
+		if err := historyManager.AddEntry(v.nowPlaying, m.GuildID, guildName, playDuration); err != nil {
+			log.Printf("WARN: Failed to add interrupted song to history during emergency reset: %v", err)
+		}
+	}
+
 	v.nowPlaying = Song{}
 
 	// Stop buffer manager
@@ -772,4 +785,113 @@ func resumeCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	s.ChannelMessageSend(m.ChannelID, "**[Muse]** ▶️ Resumed ["+v.nowPlaying.Title+"]")
 	log.Printf("INFO: Resumed song: %s", v.nowPlaying.Title)
+}
+
+// historyCommand displays the recent song history for the current guild
+func historyCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
+	// **COMMAND DEDUPLICATION** - Prevent duplicate history commands
+	if isCommandActive(m.Author.ID, "history") {
+		log.Printf("WARN: History command blocked - already processing for user %s", m.Author.ID)
+		return
+	}
+
+	setCommandActive(m.Author.ID, "history")
+	defer clearCommandActive(m.Author.ID, "history")
+
+	if historyManager == nil {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** ❌ History system is not available.")
+		return
+	}
+
+	s.ChannelMessageSend(m.ChannelID, "**[Muse]** Fetching song history...")
+
+	// Get recent history (limit to 20 entries for readability)
+	entries, err := historyManager.GetHistory(m.GuildID, 20)
+	if err != nil {
+		log.Printf("ERROR: Failed to get history: %v", err)
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** ❌ Failed to retrieve history.")
+		return
+	}
+
+	if len(entries) == 0 {
+		s.ChannelMessageSend(m.ChannelID, "**[Muse]** 📜 No song history found for this server. Start playing some music to build up history!")
+		return
+	}
+
+	// Build header
+	historyMessage := ":scroll: **SONG HISTORY** :scroll:\n\n"
+	historyMessage += fmt.Sprintf("**Recently played in %s (%d songs):**\n\n", 
+		entries[0].GuildName, len(entries))
+
+	// Process history with pagination (same approach as queue display)
+	const maxMessageLength = 1000 // Conservative limit to prevent Discord truncation
+	const maxSongsPerMessage = 10 // Force pagination every 10 songs
+	currentMessage := historyMessage
+	songsSentInThisMessage := 0
+
+	for index, entry := range entries {
+		// Format play duration
+		duration := time.Duration(entry.Duration) * time.Second
+		durationStr := formatDuration(duration)
+		
+		// Format timestamp (relative time)
+		timeSince := time.Since(entry.PlayedAt)
+		timeStr := formatTimeSince(timeSince)
+
+		songLine := fmt.Sprintf("%d. **%s** (%s)\n   *Played by <@%s> • %s ago*\n\n", 
+			index+1, entry.Song.Title, durationStr, entry.Song.User, timeStr)
+
+		// Check if we need pagination
+		if len(currentMessage)+len(songLine) > maxMessageLength || songsSentInThisMessage >= maxSongsPerMessage {
+			// Send current message
+			s.ChannelMessageSend(m.ChannelID, currentMessage)
+
+			// Start fresh message for continuation (no header, just songs)
+			currentMessage = ""
+			songsSentInThisMessage = 0
+		}
+
+		// Add the song to current message
+		currentMessage += songLine
+		songsSentInThisMessage++
+	}
+
+	// Send the final message (or only message if history is small)
+	if len(currentMessage) > 0 {
+		s.ChannelMessageSend(m.ChannelID, currentMessage)
+	}
+
+	log.Printf("INFO: Displayed history for guild %s (%d entries)", m.GuildID, len(entries))
+}
+
+// Helper function to format duration in a readable way
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%.0fs", d.Seconds())
+	} else if d < time.Hour {
+		minutes := int(d.Minutes())
+		seconds := int(d.Seconds()) % 60
+		return fmt.Sprintf("%dm%ds", minutes, seconds)
+	} else {
+		hours := int(d.Hours())
+		minutes := int(d.Minutes()) % 60
+		return fmt.Sprintf("%dh%dm", hours, minutes)
+	}
+}
+
+// Helper function to format time since in a readable way
+func formatTimeSince(d time.Duration) string {
+	if d < time.Minute {
+		return "just now"
+	} else if d < time.Hour {
+		return fmt.Sprintf("%.0f min", d.Minutes())
+	} else if d < 24*time.Hour {
+		return fmt.Sprintf("%.0f hours", d.Hours())
+	} else {
+		days := int(d.Hours() / 24)
+		if days == 1 {
+			return "1 day"
+		}
+		return fmt.Sprintf("%d days", days)
+	}
 }

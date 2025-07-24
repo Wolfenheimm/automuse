@@ -192,6 +192,17 @@ func (app *Application) initializeLegacyGlobals() {
 		bufferManager = NewBufferManager(app.config.Cache.BufferSize)
 	}
 	
+	// Initialize history manager
+	if historyManager == nil {
+		historyConfig := HistoryConfig{
+			MaxEntries:        app.config.History.MaxEntries,
+			DataFile:          app.config.History.DataFile,
+			EnableAutosave:    app.config.History.EnableAutosave,
+			EnablePersistence: app.config.History.EnablePersistence,
+		}
+		historyManager = NewHistoryManager(historyConfig)
+	}
+	
 	// Initialize voice instance
 	if v == nil {
 		v = new(VoiceInstance)
@@ -384,6 +395,7 @@ func (app *Application) isCommand(content string) bool {
 		   content == "shuffle" ||
 		   content == "emergency-reset" ||
 		   content == "reset" ||
+		   content == "history" ||
 		   len(content) > 5 && content[:5] == "play " ||
 		   len(content) > 5 && content[:5] == "skip " ||
 		   len(content) > 7 && content[:7] == "remove " ||
@@ -723,6 +735,19 @@ func (r *ResumeCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate)
 	go func() {
 		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
 		resumeCommand(s, m)
+	}()
+	return nil
+}
+
+type HistoryCommand struct{}
+
+func (h *HistoryCommand) CanHandle(content string) bool {
+	return content == "history"
+}
+func (h *HistoryCommand) Handle(s *discordgo.Session, m *discordgo.MessageCreate) error {
+	go func() {
+		defer RecoverWithErrorHandler(errorHandler, m.ChannelID)
+		historyCommand(s, m)
 	}()
 	return nil
 }

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/bwmarrin/discordgo"
 	"github.com/jonas747/dca"
 )
@@ -48,6 +50,7 @@ type VoiceInstance struct {
 	speaking      bool
 	paused        bool
 	currentUserID string // Track the user who initiated the current session
+	playStartTime time.Time // Track when current song started playing
 }
 
 type BadQualitySongNodes struct {

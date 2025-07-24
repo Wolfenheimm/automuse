@@ -93,6 +93,9 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 			break
 		}
 		v.nowPlaying, queue = queue[0], queue[1:]
+		
+		// Track when this song started playing for history
+		v.playStartTime = time.Now()
 
 		// Update buffer manager with current queue state
 		bufferManager.UpdateQueue(queue, currentPlayingIndex)
@@ -145,12 +148,38 @@ func playQueue(m *discordgo.MessageCreate, isManual bool) {
 				// Audio finished normally
 				log.Printf("INFO: Audio playback completed normally")
 				ticker.Stop()
+				
+				// Record song in history
+				if historyManager != nil && v.nowPlaying.Title != "" {
+					playDuration := time.Since(v.playStartTime)
+					guildName := ""
+					if guild, err := s.State.Guild(v.guildID); err == nil {
+						guildName = guild.Name
+					}
+					if err := historyManager.AddEntry(v.nowPlaying, v.guildID, guildName, playDuration); err != nil {
+						log.Printf("WARN: Failed to add song to history: %v", err)
+					}
+				}
+				
 				break monitorLoop
 			}
 		}
 
 		if skipDetected {
 			log.Printf("INFO: Skip detected, moving to next song")
+			
+			// Record skipped song in history (with partial play duration)
+			if historyManager != nil && v.nowPlaying.Title != "" {
+				playDuration := time.Since(v.playStartTime)
+				guildName := ""
+				if guild, err := s.State.Guild(v.guildID); err == nil {
+					guildName = guild.Name
+				}
+				if err := historyManager.AddEntry(v.nowPlaying, v.guildID, guildName, playDuration); err != nil {
+					log.Printf("WARN: Failed to add skipped song to history: %v", err)
+				}
+			}
+			
 			// Give a moment for cleanup
 			time.Sleep(100 * time.Millisecond)
 			continue // Skip to next song

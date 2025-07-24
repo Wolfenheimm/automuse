@@ -66,6 +66,7 @@ var (
 		&MoveQueueCommand{},
 		&ShuffleQueueCommand{},
 		&EmergencyResetCommand{},
+		&HistoryCommand{},
 	}
 )
 
