@@ -247,3 +247,5 @@ $GOPATH/pkg/mod/
 # 2. Use git filter-branch or BFG Repo-Cleaner to remove from history
 # 3. Force push the cleaned history
 # =============================================================================
+
+Claude.md
